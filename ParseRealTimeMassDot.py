@@ -5,6 +5,9 @@ import pandas as pd
 import urllib2 as url
 import json
 import sys
+import BlueToadAnalysis as BTA
+import NCDC_WeatherProcessor as NCDC
+import datetime as dt
 
 def ParseJson(current_transit_dict):
 	"""Given a json taken from mass-dot's real-time feed (current_transit_dict), 
@@ -30,6 +33,30 @@ def unique(seq, keepstr=True):
 	seen = []
 	return t(c for c in seq if not (c in seen or seen.append(c)))
 
+def GetCurrentInfo(massdot_current, DiurnalDic):
+	"""To run a real-time prediction scheme, we must obtain three pieces of information.
+	The first is the current weather conditions.  We have not constructed a real-time query
+	to NOAA/NCDC.  This is probably above my pay-grade, but I can dig into it.  The second is
+	a normalized estimate of traffic conditions.  The third is the day of the week"""
+	req = url.Request(massdot_current)
+	opener = url.build_opener()
+	f = opener.open(req)
+	current_time, current_data = ParseJson(json.load(f))
+	day_of_week = BTA.GetDayOfWeek(int(NCDC.GetTimeFromDateTime(dt.datetime.now(), False)))
+	time_of_day_ind = int(NCDC.GetTimeFromDateTime(dt.datetime.now(), True) * 288)
+	
+	pair_cond_weather_dic = {}
+	for p, tt in zip(current_data.pairId, current_data.travelTime):
+		#This automatically appends a ' ', indicating CLEAR weather...this must be altered
+		key = p + "_" + str(day_of_week) #the key to locate the diurnal cycle for this day...	
+		if key not in DiurnalDic.keys():
+			pair_cond_weather_dic[p] = [0, ' ']
+			print "Unable to locate key %s" % key
+		else:
+			pair_cond_weather_dic[p] = [float(tt) - DiurnalDic[p + "_" + str(day_of_week)][time_of_day_ind], ' ']
+	
+	return day_of_week, pair_cond_weather_dic
+	
 if __name__ == "__main__":
 	script_name, massdot_current = sys.argv
 	#where to fetch real-time data for transit:

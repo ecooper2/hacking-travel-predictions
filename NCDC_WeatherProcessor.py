@@ -5,12 +5,24 @@ relevant months."""
 import sys
 import os
 import pandas as pd
+import numpy as np
 
 global days_in_months 
 global leaps
 days_in_months = np.cumsum([31,28,31,30,31,30,31,31,30,31,30,31]) #for date conversion
 leaps = [1900 + 4 * x for x in range(50)] #for leap year determination
 
+def GetTimeFromDateTime(now, time = True, d_i_m = days_in_months, ls = leaps):
+	"""Given a (now) from datetime.datetime.now, return the standard YYYYDOY.XXX 
+	in five-minute fractions..."""
+	w_date = now.year * 10000 + now.month * 100 + now.day
+	w_time = now.hour * 100 + now.minute + float(now.second)/60
+	now_time = ConvertWeatherDate(w_date, w_time, 288, 3, d_i_m = days_in_months, ls = leaps)
+	if time: #if we're only returning the fraction of the day (.XXX)
+		return round(now_time - int(now_time),3)
+	else: #if we want the (YYYYDOY)
+		return int(now_time)
+		
 def GetRelevantFileList(site_name, weather_dir):
 	"""Given the (site_name) and the directory to search for files (weather_dir),
 	a relative path, return a list of all .txt files containing the site name"""
@@ -47,6 +59,18 @@ def BuildSiteDataFrame(weather_dir, all_files):
 			site_df.index = range(len(site_df)) #re-index 
 	return site_df
 	
+def GetType(w):
+	"""Return a mapped value for numerous types of weather to one heading.
+	More information found at: http://cdo.ncdc.noaa.gov/qclcd/qclcddocumentation.pdf."""
+	if 'SN' in w or 'FZ' in w: #snow or freezing rain
+		return 'SN'
+	elif 'RA' in w or 'TS' in w: #various forms of rain
+		return 'RA'
+	elif 'FG' in w or 'HZ' in w or 'BR' in w: #fog, haze, mist
+		return 'FG'
+	else:
+		return ' ' #clear weather
+		
 def RoundToNearestNth(val, N, dec):
 	"""Given a (val), round to the nearest (N)th fraction to (dec) decimal places,
 	for instance, 100.139 to the nearest 20th, to 3 places, is: 100.150."""
@@ -68,12 +92,20 @@ def ConvertWeatherDate(w_date, w_time, N, dec, d_i_m = days_in_months, ls = leap
 		day_of_year = d_i_m[month-2] + day - 1 #so Jan 1st is 2012000.XXX, e.g.
 	time = RoundToNearestNth(w_time/2400, N, dec) #get fractional time of day, rounded...
 	return int(year * 1000 + day_of_year) + time
+
+def GetWeatherData(weather_dir, site_name):
+	"""Given the (site_name) of the relevant weather site ("BostonAirport", e.g.), and the
+	(weather_dir) in which they are found, return the full data frame."""
+	if os.path.exists(os.path.join(weather_dir, site_name + "_NCDC.csv")):
+		return pd.read_csv(os.path.join(weather_dir, site_name + "_NCDC.csv"))
+	else: #if the relevant .csv file must be generated (generally a 5-10 second process)
+		file_list = GetRelevantFileList(site_name, weather_dir)
+		full_site = BuildSiteDataFrame(weather_dir, file_list)
+		full_site.to_csv(os.path.join(weather_dir, site_name + "_NCDC.csv"), index = False)
 	
-	
-		
 if __name__ == "__main__":
 	script_name, site_name = sys.argv
-	weather_dir = os.path.join("NCDC_Weather")
+	weather_dir = os.path.join(blue_toad_path, "..", "..", "NCDC_Weather")
 	file_list = GetRelevantFileList(site_name, weather_dir)
 	full_site = BuildSiteDataFrame(weather_dir, file_list)
-	full_site.to_csv(os.path.join(weather_dir, site_name + "_NCDC.csv"))
+	full_site.to_csv(os.path.join(weather_dir, site_name + "_NCDC.csv"), index = False)
