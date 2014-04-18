@@ -202,15 +202,15 @@ def GetSub_DayOfWeek(mini_bt, d_o_w):
 	else:
 		return d_o_w_bt
 	
-def GenerateNormalizedPredictions(bt, ps_and_cs, weather_fac_dic, 
-								day_of_week, pct_range, time_range):
+def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, 
+								day_of_week, pct_range, time_range, bt_path, bt_name):
 	"""Iterate over all pair_ids and determine similar matches in terms of time_of_day,
 	weather, traffic, and day_of_week...and generate 288 five-minute predictions (a
 	24-hour prediction in 5-minute intervals)"""
-	all_pair_ids = mass.unique(bt.pair_id) #obtain a list of unique pair_ids		
 	PredictionDic = {}
-	for a in all_pair_ids: #iterate over each pair_id and generate a string of predictions 
-		sub_bt = bt[bt.pair_id == a] #just the given stretch of road
+	for a in all_pair_ids.pair_id: #iterate over each pair_id and generate a string of predictions 
+		sub_bt = pd.read_csv(os.path.join(bt_path, "IndividualFiles", bt_name + "_" + str(a) + 
+								"_" + "Cleaned_Normalized_Weather.csv"))
 		sub_bt.index = range(len(sub_bt)) #re-index, starting from zero
 		L = len(sub_bt) #how many examples, and more importantly, when does this end...
 		weather_sub_bt = sub_bt[sub_bt.weather == ps_and_cs[str(a)][1]] #just similar weather
@@ -228,7 +228,7 @@ def GenerateNormalizedPredictions(bt, ps_and_cs, weather_fac_dic,
 			prediction_sub = sub_bt[sub_bt.index.isin(viable_future_indices)]
 			pred_list.append(np.average(prediction_sub.Normalized_t))
 		PredictionDic[str(a)] = pred_list #append the 288-element string of predictions	
-	with open(os.path.join(blue_toad_path, 'CurrentPredictions.txt'), 'w') as outfile:
+	with open(os.path.join(bt_path, 'CurrentPredictions.txt'), 'w') as outfile:
 		json.dump(DiurnalDic, outfile)
 	return PredictionDic
 
@@ -325,10 +325,10 @@ if __name__ == "__main__":
 			sub_bt = AttachWeatherData(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
 										blue_toad_name + "_" + str(a), weather_dir, weather_site_name)
 
-	day_of_week, pairs_and_conditions = mass.GetCurrentInfo('http://www.acollier.com/massdot/current.json',
+	day_of_week, pairs_and_conditions = mass.GetCurrentInfo('http://traffichackers.com/current.json',
 												DiurnalDic)
-	PredictionDic = GenerateNormalizedPredictions(bt, pairs_and_conditions, weather_fac_dic, 
-												day_of_week, pct_range, time_range)
+	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, weather_fac_dic, 
+									day_of_week, pct_range, time_range, blue_toad_path, blue_toad_name)
 	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, day_of_week)
 	with open(os.path.join(blue_toad_path, 'CurrentPredictions.txt'), 'w') as outfile:
 		json.dump(CurrentPredDic, outfile)
