@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import numpy as np
 import NCDC_WeatherProcessor as NCDC
+import ParseRealTimeMassDot as mass
 
 def GetRoadVolume_Historical(file_path, Cleaned, file_name):
 	"""(Cleaned) is a boolean variable describing whether a pre-developed data frame has already
@@ -69,10 +70,10 @@ def GetRoadVolume_Historical(file_path, Cleaned, file_name):
 	else: #if the file is already cleaned - simply read it into memory and return it
 		return pd.read_csv(file_path, file_name + "_Cleaned.csv")
 		
-def GetBlueToad(file_path, Cleaned, file_name):
-	"""(Cleaned) is a boolean variable describing whether a pre-developed data frame has already
-	been produced.  (file_path) denotes a relative path to the cleaned or uncleaned file. 
-
+def GetBlueToad(file_path, file_name):
+	"""(file_path) denotes a relative path to the cleaned or uncleaned file. (file_name) is the name
+	of the file within that directory.
+	
 	pair_id: Identifies a pair of bluetooth sensors in a particular direction, Ex: 60, type = int
 	insert_time: The time at which the measurement was made, Ex: 20120613.609, type = float
 	travel_time: The time in seconds it takes cars to travel the road segment between two sensors, Ex: 742, type = int
@@ -84,38 +85,46 @@ def GetBlueToad(file_path, Cleaned, file_name):
 				
 	days_in_month = np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]) #to covert into day_of_year		
 	leap_years = [1900 + 4*x for x in range(50)] #runs until 2096 for potential leap_years
-	
-	if not Cleaned: #if we are going to need to parse a given file
-		BlueToad_df = pd.read_csv(os.path.join(file_path, file_name))
-		#Now, convert our dates to the relevant format
+
+	BlueToad_df = pd.read_csv(os.path.join(file_path, file_name + ".csv"))
+	#if we haven't found generated unique ids to be used to break the massive data file into its constituents
+	if os.path.exists(os.path.join(file_path, "all_pair_ids.csv")): 	
+		all_pair_ids = pd.read_csv(os.path.join(file_path, "all_pair_ids.csv"))
+	else:
+		all_pair_ids = mass.unique(BlueToad_df.pair_id)
+		all_pair_ids = pd.DataFrame({"pair_id" : all_pair_ids})
+		all_pair_ids.to_csv(os.path.join(file_path, "all_pair_ids.csv"), index = False)
+	#Now, convert our dates to the relevant format
+	for a in all_pair_ids.pair_id:
+		sub_bt = BlueToad_df[BlueToad_df.pair_id == a]
 		cleaned_dates = []
-		print "Converting Dates"
-		for i in BlueToad_df.insert_time: 
+		print "Converting date for site %d" % a
+		for i in sub_bt.insert_time: 
 			slash_date, colon_time = i.split(" ")
 			num_date = SlashDateToNumerical(slash_date, days_in_month, leap_years) + ColonTimeToDecimal(colon_time)
 			num_date = NCDC.RoundToNearestNth(num_date, 288, 3)
 			cleaned_dates.append(num_date)
-		BlueToad_df.insert_time = cleaned_dates #replace with suitable numerical, ordinal dates
+		sub_bt.insert_time = cleaned_dates #replace with suitable numerical, ordinal dates
 		del(cleaned_dates) #to conserve memory
-		BlueToad_df.to_csv(os.path.join(file_path, file_name + "_Cleaned.csv"),
+		sub_bt.to_csv(os.path.join(file_path, "IndividualFiles", file_name + "_" + str(a) + "_Cleaned.csv"),
 							index = False)
-		return BlueToad_df
-	else: #if the file is already cleaned - simply read it into memory and return it
-		return pd.read_csv(os.path.join(file_path, file_name + "_Cleaned.csv"))
+	return None	
 
 def CleanBlueToad(BlueToad_df, file_path, file_name):
 	"""Having converted BlueToad dates, remove those rows from the data frame in which the listed
 	travel time is '\\N'."""
-	###now, remove all non-numerical values from BlueToad_df.travel_time
-	print "Removing Erroneous Data"
-	BlueToad_df = BlueToad_df[BlueToad_df.travel_time != "\\N"] #not numbers? remove 'em!
+	###now, remove all non-numerical values from each BlueToad_df.travel_time
+	print "Removing erroneous data for site %d" % int(BlueToad_df.pair_id[0:1])
+	mask = BlueToad_df.applymap(lambda x: x in ["\\N"]) #we can add to this if needed...basically, 
+	#the "mask" removes any row that contains anything in the banned set
+	BlueToad_df = BlueToad_df[-mask.any(axis=1)] #not numbers? remove 'em!
 	BlueToad_df.to_csv(os.path.join(file_path, file_name + "_Cleaned.csv"),
 						index = False)
 	return BlueToad_df
 	
 def FloatConvert(BlueToad_df, file_path, file_name):
 	"""Convert the travel_time column from strings to floats."""
-	print "Reformatting Travel Times As Floats..."
+	print "Reformatting Travel Times As Floats...for site %d" % int(BlueToad_df.pair_id[0:1])
 	BlueToad_df.travel_time = BlueToad_df.travel_time.astype('float64')
 	print "Writing to File"
 	BlueToad_df.to_csv(os.path.join(file_path, file_name + "_Cleaned.csv"),

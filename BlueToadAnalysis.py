@@ -13,6 +13,7 @@ global five_minute_fractions
 five_minute_fractions = [round(float(f)/288,3) for f in range(288)]
 
 def AddDayOfWeekColumn(blue_toad, blue_toad_path, blue_toad_name):
+	print "Adding days of the week for site %d" % int(blue_toad.pair_id[0:1])
 	"""Given a list of YYYYDOY, return the relevant day of the week from 0-Monday, to 6-Sunday"""	
 	days = [int(d) for d in blue_toad.insert_time] #remove the decimal point for time-of-day
 	unique_days = mass.unique(days) #which days appear in our dataset?
@@ -94,14 +95,11 @@ def NormalizeTravelTime(bt, DiurnalDic, blue_toad_path, blue_toad_name):
 	the difference between the expected travel time from (DiurnalDic) and the actual 
 	time reported by travel time. (actual - theoretical)"""
 	normalized_times = [] 
-	previous_id = 999999
-	for row in xrange(len(bt)): #zipping takes up too much RAM...requires an iterator
-		if bt.pair_id[row] != previous_id:
-			previous_id = bt.pair_id[row]
-			print "Now normalizing site %d" % bt.pair_id[row]
-		diurnal_key = str(bt.pair_id[row]) + "_" + str(bt.day_of_week[row]) #to find the correct key of the dictionary
-		time_index = int((bt.insert_time[row] - int(bt.insert_time[row])) * 288 + .0001)
-		normalized_times.append(bt.travel_time[row] - DiurnalDic[diurnal_key][time_index])
+	print "Now normalizing site %d" % int(bt.pair_id[0:1])
+	for p, d, i, t in zip(bt.pair_id, bt.day_of_week, bt.insert_time, bt.travel_time): 
+		diurnal_key = str(p) + "_" + str(d) #to find the correct key of the dictionary
+		time_index = int((i - int(i)) * 288 + .0001)
+		normalized_times.append(t - DiurnalDic[diurnal_key][time_index])
 	bt['Normalized_t'] = normalized_times
 	bt.to_csv(os.path.join(blue_toad_path, blue_toad_name + "_Cleaned" + "_Normalized.csv"),
 						index = False)
@@ -148,9 +146,10 @@ def AttachWeatherData(bt, bt_path, bt_name, w_dir, w_site_name):
 	"""Given a (bt) dataset and a weather directory (w_dir) in which to find the relevant
 	data, process the appropriate (w_site_name), read and simplify weather data, then
 	attach the appropriate column to bt and write to file."""
+	print "Appending weather data for site %d" % int(bt.pair_id[0:1])
 	weather_data = ProcessWeatherData(w_dir, w_site_name)
 	bt = AppendWeatherInformation(weather_data, bt)
-	bt.to_csv(os.path.join(blue_toad_path, blue_toad_name + "_Cleaned" + "_Normalized" + "_Weather.csv"), index = False)
+	bt.to_csv(os.path.join(bt_path, bt_name + "_Cleaned" + "_Normalized" + "_Weather.csv"), index = False)
 	return bt
 	
 def GetAcceptableTimeRanges(time_range):
@@ -252,8 +251,8 @@ def HardCodedParameters():
 	"""This might later be converted to a dictionary for convenience.  As it stands,
 	this returns a number of parameters we are unlikely to change..."""
 	blue_toad_path = os.path.join("..","..","..","Boston_Andrew","MassDothack-master", "Road_RTTM_Volume")
-	blue_toad_name = "massdot_bluetoad_data.csv"
-	bt_proc = "W"; weather_site_name = "BostonAirport"
+	blue_toad_name = "massdot_bluetoad_data"
+	bt_proc = "no_update"; weather_site_name = "BostonAirport"
 	window = 12 #how many five-minute interval defines a suitable moving-average window
 	#bt_proc can be "W" for weather-added, "N" for 'normalized', "C" for 'cleaned' 
 	#or anything else to denote uncleaned.
@@ -266,28 +265,65 @@ def HardCodedParameters():
 if __name__ == "__main__":
 	#script_name, blue_toad_path, blue_toad_name, bt_proc, weather_site_name = sys.argv
 	blue_toad_path, blue_toad_name, bt_proc, weather_site_name, window, weather_dir, pct_range, time_range, weather_fac_dic = HardCodedParameters()
-	if "W" in bt_proc: #cleaned, normalized, and weather already attached (open only 1M rows for memory)
-		bt = pd.read_csv(os.path.join(blue_toad_path, blue_toad_name + "_Cleaned" + "_Normalized" + "_Weather.csv"), nrows = 1000000)
-		DiurnalDic = GetJSON(blue_toad_path, "DiurnalDictionary.txt")
-	elif "N" in bt_proc: #cleaned and normalized already
-		bt = pd.read_csv(os.path.join(blue_toad_path, blue_toad_name + "_Cleaned" + "_Normalized.csv"))
-		bt = AttachWeatherData(bt, blue_toad_path, blue_toad_name, weather_dir, weather_site_name)
-		DiurnalDic = GetJSON(blue_toad_path, "DiurnalDictionary.txt")
-	elif "C" in bt_proc: #this is cleaned, but not yet normalized
-		bt = data.GetBlueToad(blue_toad_path, True, blue_toad_name)
+	if "no_update" in bt_proc: #if, rather than process files, we wish to process only those files that need it
+		all_pair_ids = pd.read_csv(os.path.join(blue_toad_path, "all_pair_ids.csv"))
+		#all_pair_ids must exist.  The file can be shortened to only include certain roadways.
 		if os.path.exists(os.path.join(blue_toad_path, "DiurnalDictionary.txt")): #if we've already generated our diurnal dict.
 			DiurnalDic = GetJSON(blue_toad_path, "DiurnalDictionary.txt")
 		else:
-			DiurnalDic = GenerateDiurnalDic(bt, blue_toad_path, five_minute_fractions, window)
-		bt = NormalizeTravelTime(bt, DiurnalDic, blue_toad_path, blue_toad_name)
+			DiurnalDic = {}
+		for a in all_pair_ids.pair_id: #site-by-site, adding what is needed for each
+			print "Processing roadway %d" % a 
+			if os.path.exists(os.path.join(blue_toad_path, "IndividualFiles", blue_toad_name + "_" +
+											str(a) + "_" + "Cleaned_Normalized_Weather.csv")):
+				pass #the file has been normalized with included weather
+			elif os.path.exists(os.path.join(blue_toad_path, "IndividualFiles", blue_toad_name + "_" +
+											str(a) + "_" + "Cleaned_Normalized.csv")): #weather still needed.
+				sub_bt = pd.read_csv(os.path.join(blue_toad_path, "IndividualFiles", 
+							blue_toad_name + "_" + str(a) + "_Cleaned_Normalized.csv"))
+				sub_bt = AttachWeatherData(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
+							blue_toad_name + "_" + str(a), weather_dir, weather_site_name)
+			elif os.path.exists(os.path.join(blue_toad_path, "IndividualFiles", blue_toad_name + "_" +
+											str(a) + "_" + "Cleaned.csv")): #Normalization and weather needed.
+				sub_bt = pd.read_csv(os.path.join(blue_toad_path, "IndividualFiles", 
+							blue_toad_name + "_" + str(a) + "_Cleaned.csv"))
+				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a))
+				sub_bt = AttachWeatherData(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a), weather_dir, weather_site_name)
+			else:
+				sub_bt = pd.read_csv(os.path.join(blue_toad_path, "IndividualFiles", 
+											  blue_toad_name + "_" + str(a) + "_Cleaned.csv"))
+				sub_bt = data.CleanBlueToad(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a)) #remove "/N" examples
+				sub_bt = data.FloatConvert(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a)) #convert strings to float where possible
+				sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a)) #0-Mon, 6-Sun
+				DiurnalDic.update(GenerateDiurnalDic(sub_bt, blue_toad_path, five_minute_fractions, window))
+				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a))
+				sub_bt = AttachWeatherData(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a), weather_dir, weather_site_name)
 	else: #if we need to process everything
-		bt = data.GetBlueToad(blue_toad_path, False, blue_toad_name) #read it in and re-format dates
-		bt = data.CleanBlueToad(bt, blue_toad_path, blue_toad_name) #remove "/N" examples
-		bt = data.FloatConvert(bt, blue_toad_path, blue_toad_name) #convert strings to float where possible
-		bt = AddDayOfWeekColumn(bt, blue_toad_path, blue_toad_name) #0-Mon, 6-Sun
-		DiurnalDic = GenerateDiurnalDic(bt, blue_toad_path, five_minute_fractions, window)
-		bt = NormalizeTravelTime(bt, DiurnalDic, blue_toad_path, blue_toad_name)
-		bt = AttachWeatherData(bt, blue_toad_path, blue_toad_name, weather_dir, weather_site_name)
+		data.GetBlueToad(blue_toad_path, blue_toad_name) #read it in and re-format dates
+		all_pair_ids = pd.read_csv(os.path.join(blue_toad_path, "all_pair_ids.csv"))
+		DiurnalDic = {} #To be appended, site by site
+		for a in all_pair_ids.pair_id: #process by site, 
+			sub_bt = pd.read_csv(os.path.join(blue_toad_path, "IndividualFiles", 
+											  blue_toad_name + "_" + str(a) + "_Cleaned.csv"))
+			sub_bt = data.CleanBlueToad(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a)) #remove "/N" examples
+			sub_bt = data.FloatConvert(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a)) #convert strings to float where possible
+			sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a)) #0-Mon, 6-Sun
+			DiurnalDic.update(GenerateDiurnalDic(sub_bt, blue_toad_path, five_minute_fractions, window))
+			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a))
+			##########weather_site_name = GetWeatherSite(lat, lon) #to determine where to fetch weather conditions							
+			sub_bt = AttachWeatherData(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
+										blue_toad_name + "_" + str(a), weather_dir, weather_site_name)
 
 	day_of_week, pairs_and_conditions = mass.GetCurrentInfo('http://www.acollier.com/massdot/current.json',
 												DiurnalDic)
