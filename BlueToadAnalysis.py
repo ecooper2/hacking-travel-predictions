@@ -203,43 +203,59 @@ def GetSub_DayOfWeek(mini_bt, d_o_w):
 		return d_o_w_bt
 	
 def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, 
-								day_of_week, pct_range, time_range, bt_path, bt_name):
+								day_of_week, pct_range, time_range, bt_path, bt_name, pcts):
 	"""Iterate over all pair_ids and determine similar matches in terms of time_of_day,
 	weather, traffic, and day_of_week...and generate 288 five-minute predictions (a
 	24-hour prediction in 5-minute intervals)"""
 	PredictionDic = {}
 	for a in all_pair_ids.pair_id: #iterate over each pair_id and generate a string of predictions 
-		sub_bt = pd.read_csv(os.path.join(bt_path, "IndividualFiles", bt_name + "_" + str(a) + 
+		PredictionDic[str(a)] = {}
+		if str(a) in ps_and_cs.keys(): #if we have access to current conditions at this locations
+			sub_bt = pd.read_csv(os.path.join(bt_path, "IndividualFiles", bt_name + "_" + str(a) + 
 								"_" + "Cleaned_Normalized_Weather.csv"))
-		sub_bt.index = range(len(sub_bt)) #re-index, starting from zero
-		L = len(sub_bt) #how many examples, and more importantly, when does this end...
-		weather_sub_bt = sub_bt[sub_bt.weather == ps_and_cs[str(a)][1]] #just similar weather
-		L_w = len(weather_sub_bt)
-		traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range, L_w)
-		traffic_sub_bt['time_of_day'] = [round(traffic_sub_bt.insert_time[i] - int(traffic_sub_bt.insert_time[i]),3) 
-										for i in traffic_sub_bt.index]
-		time_sub_bt = GetSub_Times(traffic_sub_bt, time_range * weather_fac_dic[ps_and_cs[str(a)][1]])
-		day_sub_bt = GetSub_DayOfWeek(time_sub_bt, day_of_week)
-		#######Generate Predictions#####
-		pred_list = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
-		print "Generating Predictions for site %d" % a
-		for ind,f in enumerate(five_minute_fractions): #for generating of predictions at each forward step
-			viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if i + ind + 1 < L]
-			prediction_sub = sub_bt[sub_bt.index.isin(viable_future_indices)]
-			pred_list.append(np.average(prediction_sub.Normalized_t))
-		PredictionDic[str(a)] = pred_list #append the 288-element string of predictions	
+			sub_bt.index = range(len(sub_bt)) #re-index, starting from zero
+			L = len(sub_bt) #how many examples, and more importantly, when does this end...
+
+			weather_sub_bt = sub_bt[sub_bt.weather == ps_and_cs[str(a)][1]] #just similar weather
+			L_w = len(weather_sub_bt)
+			traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range, L_w)
+			traffic_sub_bt['time_of_day'] = [round(traffic_sub_bt.insert_time[i] - int(traffic_sub_bt.insert_time[i]),3) 
+											for i in traffic_sub_bt.index]
+			time_sub_bt = GetSub_Times(traffic_sub_bt, time_range * weather_fac_dic[ps_and_cs[str(a)][1]])
+			day_sub_bt = GetSub_DayOfWeek(time_sub_bt, day_of_week)
+			#######Generate Predictions#####
+			print "Generating Predictions for site %d" % a
+			for p in pcts: #iterate over the percentiles required for estimation
+				pred_list = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
+				for ind,f in enumerate(five_minute_fractions): #for generating of predictions at each forward step
+					viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if i + ind + 1 < L]
+					prediction_sub = sub_bt[sub_bt.index.isin(viable_future_indices)]
+					if p == 'min': #if we're estimating a best case
+						pred_list.append(np.min(prediction_sub.Normalized_t))	
+					elif p == 'max': #if we're estimating a worst case 
+						pred_list.append(np.max(prediction_sub.Normalized_t))
+					else:
+						pred_list.append(np.percentile(prediction_sub.Normalized_t, p))	
+				PredictionDic[str(a)][str(p)] = pred_list
+		else: #use default...essentially dead-average conditions, flagged as -0.00001 rather than zero
+			print "No current information available for site %d, using default." % a
+			pred_list = [-0.00001 for i in range(288)]
+			for p in pcts: #NOTE, WITHOUT CURRENT INFO, ALL PERCENTILES WILL BE THE SAME (DEFAULT)
+				PredictionDic[str(a)][str(p)] = pred_list
 	with open(os.path.join(bt_path, 'CurrentPredictions.txt'), 'w') as outfile:
-		json.dump(DiurnalDic, outfile)
+		json.dump(PredictionDic, outfile)
 	return PredictionDic
 
 def UnNormalizePredictions(PredictionDic, DiurnalDic, day_of_week):
 	"""Turn the normalized predictions from (PredictionDic) back into the standard-form
 	estimates by using (DiurnalDic)."""
 	UnNormDic = {}
-	for key in PredictionDic.keys():
-		std_seq = DiurnalDic[key + "_" + str(day_of_week)]
-		norm_seq = PredictionDic[key]
-		UnNormDic[key] = [s + n for s,n in zip(std_seq, norm_seq)]
+	for road in PredictionDic.keys(): #iterate over all pair_ids
+		UnNormDic[str(road)] = {}
+		for p in PredictionDic[str(road)].keys():
+			std_seq = DiurnalDic[str(road) + "_" + str(day_of_week)]
+			norm_seq = PredictionDic[str(road)][str(p)]
+			UnNormDic[str(road)][str(p)] = [s + n for s,n in zip(std_seq, norm_seq)]
 	return UnNormDic
 	
 def GetJSON(f_path, f_name):
@@ -248,89 +264,90 @@ def GetJSON(f_path, f_name):
 	return json.loads(json_data)	
 
 def HardCodedParameters():
-	"""This might later be converted to a dictionary for convenience.  As it stands,
-	this returns a number of parameters we are unlikely to change..."""
-	blue_toad_path = os.path.join("..","..","..","Boston_Andrew","MassDothack-master", "Road_RTTM_Volume")
-	blue_toad_name = "massdot_bluetoad_data"
-	bt_proc = "no_update"; weather_site_name = "BostonAirport"
-	window = 12 #how many five-minute interval defines a suitable moving-average window
-	#bt_proc can be "W" for weather-added, "N" for 'normalized', "C" for 'cleaned' 
-	#or anything else to denote uncleaned.
-	weather_dir = os.path.join(blue_toad_path, "..", "..", "NCDC_Weather")
-	pct_range = .1 #how far from the current traffic's percentile can we deem 'similar'?
-	time_range = 10 #how far from the current time is considere 'similar'?
-	weather_fac_dic = {' ': 1, 'RA' : 3, 'FG' : 5, 'SN' : 10} #how many more must we grab, by cond?		
-	return blue_toad_path, blue_toad_name, bt_proc, weather_site_name, window, weather_dir, pct_range, time_range, weather_fac_dic
+	"""Returns a dictionary of parameters we are unlikely to change..."""
+	D = {"bt_path" : os.path.join("..","..","..","Boston_Andrew","MassDothack-master", "Road_RTTM_Volume"),
+	"bt_name" : "massdot_bluetoad_data",
+	"bt_proc" : "no_update", "weather_site_name" : "BostonAirport",
+	"window" : 12, #how many five-minute interval defines a suitable moving-average window
+	#bt_proc can be "no_update" if we are not processing/normalizing...otherwise the whole process ensues
+	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
+	"time_range" : 10, #how far from the current time is considered 'similar'?
+	"weather_fac_dic" : {' ': 1, 'RA' : 3, 'FG' : 5, 'SN' : 10}, #how many more must we grab, by cond?
+	"pct_tile_list" : ['min', 10, 20, 25, 30, 50, 70, 75, 90, 'max']}	#which percentiles shall be made available,
+														#along with the best and worst-case scenarios
+	D["weather_dir"] = os.path.join(D['bt_path'], "..", "..", "NCDC_Weather"),
+	return D
 	
 if __name__ == "__main__":
 	#script_name, blue_toad_path, blue_toad_name, bt_proc, weather_site_name = sys.argv
-	blue_toad_path, blue_toad_name, bt_proc, weather_site_name, window, weather_dir, pct_range, time_range, weather_fac_dic = HardCodedParameters()
-	if "no_update" in bt_proc: #if, rather than process files, we wish to process only those files that need it
-		all_pair_ids = pd.read_csv(os.path.join(blue_toad_path, "all_pair_ids.csv"))
+	D = HardCodedParameters()
+	if "no_update" in D['bt_proc']: #if, rather than process files, we wish to process only those files that need it
+		all_pair_ids = pd.read_csv(os.path.join(D['bt_path'], "all_pair_ids.csv"))
 		#all_pair_ids must exist.  The file can be shortened to only include certain roadways.
-		if os.path.exists(os.path.join(blue_toad_path, "DiurnalDictionary.txt")): #if we've already generated our diurnal dict.
-			DiurnalDic = GetJSON(blue_toad_path, "DiurnalDictionary.txt")
+		if os.path.exists(os.path.join(D['bt_path'], "DiurnalDictionary.txt")): #if we've already generated our diurnal dict.
+			DiurnalDic = GetJSON(D['bt_path'], "DiurnalDictionary.txt")
 		else:
 			DiurnalDic = {}
 		for a in all_pair_ids.pair_id: #site-by-site, adding what is needed for each
 			print "Processing roadway %d" % a 
-			if os.path.exists(os.path.join(blue_toad_path, "IndividualFiles", blue_toad_name + "_" +
+			if os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
 											str(a) + "_" + "Cleaned_Normalized_Weather.csv")):
 				pass #the file has been normalized with included weather
-			elif os.path.exists(os.path.join(blue_toad_path, "IndividualFiles", blue_toad_name + "_" +
+			elif os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
 											str(a) + "_" + "Cleaned_Normalized.csv")): #weather still needed.
-				sub_bt = pd.read_csv(os.path.join(blue_toad_path, "IndividualFiles", 
-							blue_toad_name + "_" + str(a) + "_Cleaned_Normalized.csv"))
-				sub_bt = AttachWeatherData(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
-							blue_toad_name + "_" + str(a), weather_dir, weather_site_name)
-			elif os.path.exists(os.path.join(blue_toad_path, "IndividualFiles", blue_toad_name + "_" +
+				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
+							D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
+				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+							D['bt_name'] + "_" + str(a), D['weather_dir'], D['weather_site_name'])
+			elif os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
 											str(a) + "_" + "Cleaned.csv")): #Normalization and weather needed.
-				sub_bt = pd.read_csv(os.path.join(blue_toad_path, "IndividualFiles", 
-							blue_toad_name + "_" + str(a) + "_Cleaned.csv"))
-				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a))
-				sub_bt = AttachWeatherData(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a), weather_dir, weather_site_name)
+				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
+							D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
+				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a))
+				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a), D['weather_dir'], D['weather_site_name'])
 			else:
-				sub_bt = pd.read_csv(os.path.join(blue_toad_path, "IndividualFiles", 
-											  blue_toad_name + "_" + str(a) + "_Cleaned.csv"))
-				sub_bt = data.CleanBlueToad(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a)) #remove "/N" examples
-				sub_bt = data.FloatConvert(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a)) #convert strings to float where possible
-				sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a)) #0-Mon, 6-Sun
-				DiurnalDic.update(GenerateDiurnalDic(sub_bt, blue_toad_path, five_minute_fractions, window))
-				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a))
-				sub_bt = AttachWeatherData(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a), weather_dir, weather_site_name)
+				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
+											  D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
+				sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a)) #remove "/N" examples
+				sub_bt = data.FloatConvert(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a)) #convert strings to float where possible
+				sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
+				DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['bt_path'], five_minute_fractions, D['window']))
+				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a))
+				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a), D['weather_dir'], D['weather_site_name'])
 	else: #if we need to process everything
-		data.GetBlueToad(blue_toad_path, blue_toad_name) #read it in and re-format dates
-		all_pair_ids = pd.read_csv(os.path.join(blue_toad_path, "all_pair_ids.csv"))
+		data.GetBlueToad(D['bt_path'], D['bt_name']) #read it in and re-format dates
+		all_pair_ids = pd.read_csv(os.path.join(D['bt_path'], "all_pair_ids.csv"))
 		DiurnalDic = {} #To be appended, site by site
 		for a in all_pair_ids.pair_id: #process by site, 
-			sub_bt = pd.read_csv(os.path.join(blue_toad_path, "IndividualFiles", 
-											  blue_toad_name + "_" + str(a) + "_Cleaned.csv"))
-			sub_bt = data.CleanBlueToad(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a)) #remove "/N" examples
-			sub_bt = data.FloatConvert(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a)) #convert strings to float where possible
-			sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a)) #0-Mon, 6-Sun
-			DiurnalDic.update(GenerateDiurnalDic(sub_bt, blue_toad_path, five_minute_fractions, window))
-			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a))
+			sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
+											  D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
+			sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a)) #remove "/N" examples
+			sub_bt = data.FloatConvert(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a)) #convert strings to float where possible
+			sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
+			DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['bt_path'], five_minute_fractions, D['window']))
+			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a))
 			##########weather_site_name = GetWeatherSite(lat, lon) #to determine where to fetch weather conditions							
-			sub_bt = AttachWeatherData(sub_bt, os.path.join(blue_toad_path, "IndividualFiles"), 
-										blue_toad_name + "_" + str(a), weather_dir, weather_site_name)
+			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+										D['bt_name'] + "_" + str(a), D['weather_dir'], D['weather_site_name'])
 
 	day_of_week, pairs_and_conditions = mass.GetCurrentInfo('http://traffichackers.com/current.json',
 												DiurnalDic)
-	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, weather_fac_dic, 
-									day_of_week, pct_range, time_range, blue_toad_path, blue_toad_name)
+	PredictionDic = GenerateNormalizedPredictions(all_pair_ids[60:75], pairs_and_conditions, D['weather_fac_dic'], 
+									day_of_week, D['pct_range'], D['time_range'], 
+									D['bt_path'], D['bt_name'], D['pct_tile_list'])
 	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, day_of_week)
-	with open(os.path.join(blue_toad_path, 'CurrentPredictions.txt'), 'w') as outfile:
+	with open(os.path.join(D['bt_path'], 'CurrentPredictions.txt'), 'w') as outfile:
 		json.dump(CurrentPredDic, outfile)
 
 	
