@@ -8,6 +8,8 @@ import sys
 import BlueToadAnalysis as BTA
 import NCDC_WeatherProcessor as NCDC
 import datetime as dt
+import numpy as np
+import os
 
 def ParseJson(current_transit_dict):
 	"""Given a json taken from mass-dot's real-time feed (current_transit_dict), 
@@ -56,6 +58,25 @@ def GetCurrentInfo(massdot_current, DiurnalDic):
 			pair_cond_weather_dic[p] = [float(tt) - DiurnalDic[p + "_" + str(day_of_week)][time_of_day_ind], ' ']
 	
 	return day_of_week, pair_cond_weather_dic
+
+def GetRoadAveCoords(road_coord_list):
+	"""Lat/Lons are provided for each pair_id in the form of lists.  This function simply returns
+	the average lat and lon for each individual stretch of roadway."""
+	L = len(road_coord_list) #how many coordinates are given
+	return np.sum([coord[0]/L for coord in road_coord_list]), np.sum([coord[1]/L for coord in road_coord_list])
+	
+def GetLatLons(bt_path, file_name):
+	"""This function will read, from a repository located at (bt_path), a list of the roadway
+	ids (file_name), then determine an average lat/lon location to be employed to locate relevant features, i.e.
+	from where shall we gather weather data.  It will then write the appropriate JSON to (bt_path)."""
+	lat_lons = BTA.GetJSON(bt_path, file_name)
+	RoadwayCoordsDic = {}
+	for i in range(len(lat_lons['segments'])): #iterate over all roadways
+		road_lat, road_lon = GetRoadAveCoords(lat_lons['segments'][i][1])
+		RoadwayCoordsDic[str(int(lat_lons['segments'][i][0]))] = {"Lat" : road_lat, "Lon" : road_lon}
+	with open(os.path.join(bt_path, 'RoadwayCoordsDic.txt'), 'w') as outfile:
+		json.dump(RoadwayCoordsDic, outfile)
+	return RoadwayCoordsDic
 	
 if __name__ == "__main__":
 	script_name, massdot_current = sys.argv

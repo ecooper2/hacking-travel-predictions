@@ -267,15 +267,18 @@ def HardCodedParameters():
 	"""Returns a dictionary of parameters we are unlikely to change..."""
 	D = {"bt_path" : os.path.join("..","..","..","Boston_Andrew","MassDothack-master", "Road_RTTM_Volume"),
 	"bt_name" : "massdot_bluetoad_data",
-	"bt_proc" : "no_update", "weather_site_name" : "BostonAirport",
+	"bt_proc" : "no_update", "weather_site_name" : "closest", "weather_site_default" : "BostonAirport",
 	"window" : 12, #how many five-minute interval defines a suitable moving-average window
 	#bt_proc can be "no_update" if we are not processing/normalizing...otherwise the whole process ensues
 	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
 	"time_range" : 10, #how far from the current time is considered 'similar'?
 	"weather_fac_dic" : {' ': 1, 'RA' : 3, 'FG' : 5, 'SN' : 10}, #how many more must we grab, by cond?
-	"pct_tile_list" : ['min', 10, 20, 25, 30, 50, 70, 75, 90, 'max']}	#which percentiles shall be made available,
-														#along with the best and worst-case scenarios
-	D["weather_dir"] = os.path.join(D['bt_path'], "..", "..", "NCDC_Weather"),
+	"pct_tile_list" : ['min', 10, 20, 25, 30, 50, 70, 75, 90, 'max'], #which percentiles shall be made available, 
+										#along with the best and worst-case scenarios
+	"path_to_lat_lons" : "https://github.com/apcollier/hacking-travel/blob/master/js/segments.js",
+	"path_to_current" : "http://traffichackers.com/current.json"}	
+														
+	D["weather_dir"] = os.path.join(D['bt_path'], "..", "..", "NCDC_Weather")
 	return D
 	
 if __name__ == "__main__":
@@ -288,8 +291,14 @@ if __name__ == "__main__":
 			DiurnalDic = GetJSON(D['bt_path'], "DiurnalDictionary.txt")
 		else:
 			DiurnalDic = {}
+		if os.path.exists(os.path.join(D['bt_path'], "RoadwayCoordsDic.txt")):	#if we've already built it
+			RoadwayCoordsDic = GetJSON(D['bt_path'], "RoadwayCoordsDic.txt")
+		else:
+			RoadwayCoordsDic = mass.GetLatLons(D['bt_path'], "Roadway_LatLonData.txt")
+			
 		for a in all_pair_ids.pair_id: #site-by-site, adding what is needed for each
 			print "Processing roadway %d" % a 
+			weather_site_name = NCDC.GetWSiteName(D, a, RoadwayCoordsDic) #which weather site is relevant?
 			if os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
 											str(a) + "_" + "Cleaned_Normalized_Weather.csv")):
 				pass #the file has been normalized with included weather
@@ -298,7 +307,7 @@ if __name__ == "__main__":
 				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
 							D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
 				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
-							D['bt_name'] + "_" + str(a), D['weather_dir'], D['weather_site_name'])
+							D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
 			elif os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
 											str(a) + "_" + "Cleaned.csv")): #Normalization and weather needed.
 				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
@@ -306,7 +315,7 @@ if __name__ == "__main__":
 				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['bt_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a))
 				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a), D['weather_dir'], D['weather_site_name'])
+										D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
 			else:
 				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
 											  D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
@@ -320,12 +329,14 @@ if __name__ == "__main__":
 				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['bt_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a))
 				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a), D['weather_dir'], D['weather_site_name'])
+										D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
 	else: #if we need to process everything
 		data.GetBlueToad(D['bt_path'], D['bt_name']) #read it in and re-format dates
 		all_pair_ids = pd.read_csv(os.path.join(D['bt_path'], "all_pair_ids.csv"))
 		DiurnalDic = {} #To be appended, site by site
+		RoadwayCoordsDic = mass.GetLatLons(D['bt_path'], "Roadway_LatLonData.txt")
 		for a in all_pair_ids.pair_id: #process by site, 
+			weather_site_name = NCDC.GetWSiteName(D, a, RoadwayCoordsDic) #which weather site is relevant?
 			sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
 											  D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
 			sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
@@ -339,10 +350,9 @@ if __name__ == "__main__":
 										D['bt_name'] + "_" + str(a))
 			##########weather_site_name = GetWeatherSite(lat, lon) #to determine where to fetch weather conditions							
 			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a), D['weather_dir'], D['weather_site_name'])
+										D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
 
-	day_of_week, pairs_and_conditions = mass.GetCurrentInfo('http://traffichackers.com/current.json',
-												DiurnalDic)
+	day_of_week, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids[60:75], pairs_and_conditions, D['weather_fac_dic'], 
 									day_of_week, D['pct_range'], D['time_range'], 
 									D['bt_path'], D['bt_name'], D['pct_tile_list'])

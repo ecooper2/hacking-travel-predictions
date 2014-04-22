@@ -6,6 +6,7 @@ import sys
 import os
 import pandas as pd
 import numpy as np
+import BlueToadAnalysis as BTA
 
 global days_in_months 
 global leaps
@@ -93,6 +94,27 @@ def ConvertWeatherDate(w_date, w_time, N, dec, d_i_m = days_in_months, ls = leap
 	time = RoundToNearestNth(w_time/2400, N, dec) #get fractional time of day, rounded...
 	return int(year * 1000 + day_of_year) + time
 
+def ShortestDist(LatLon_df, Lat, Lon):
+	"""Given a (Lat), a (Lon) and a (LatLon_df) containing columns of lats and lons, return the row
+	of that data frame corresponding to the site closest to Lat,Lon."""
+	distances = [(Lat-x)**2 + (Lon-y)**2 for x,y in zip(LatLon_df.Lat, LatLon_df.Lon)]
+	return distances.index(np.min(distances))
+	
+def GetWSiteName(D, a, RoadwayCoordsDic):
+	"""For a given pair_id (a), with the relevant dictionary to store paths (D), either we already
+	know which site is closest - this could be a preprocessing step - or we need to search a database
+	for the closest weather gauge.  This function will return the closest site as a string bearing its
+	name, 'Bedford', e.g."""
+	if D['weather_site_name'] != 'closest': #i.e. if this is already filled with a site name
+		return D['weather_site_name']
+	else: #we need to choose the appropriate NCDC climate gauge
+		w_site_coords = pd.read_csv(os.path.join(D['bt_path'],"WeatherSite_Coords.csv"))
+		if str(a) in RoadwayCoordsDic.keys(): #if these roadways' coordinates are listed
+			lat, lon = RoadwayCoordsDic[str(a)]['Lat'], RoadwayCoordsDic[str(a)]['Lon']
+			return w_site_coords.Site[ShortestDist(w_site_coords, lat, lon)]
+		else:
+			return D['weather_site_default']
+			
 def GetWeatherData(weather_dir, site_name):
 	"""Given the (site_name) of the relevant weather site ("BostonAirport", e.g.), and the
 	(weather_dir) in which they are found, return the full data frame."""
@@ -105,7 +127,8 @@ def GetWeatherData(weather_dir, site_name):
 	
 if __name__ == "__main__":
 	script_name, site_name = sys.argv
-	weather_dir = os.path.join(blue_toad_path, "..", "..", "NCDC_Weather")
+	D = BTA.HardCodedParameters()
+	weather_dir = D['weather_dir']
 	file_list = GetRelevantFileList(site_name, weather_dir)
 	full_site = BuildSiteDataFrame(weather_dir, file_list)
 	full_site.to_csv(os.path.join(weather_dir, site_name + "_NCDC.csv"), index = False)
