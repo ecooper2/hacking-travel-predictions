@@ -17,12 +17,13 @@ def ParseJson(current_transit_dict):
 	time_string = current_transit_dict['lastUpdated'] #when is this record taken?
 	example_pair_id = current_transit_dict['pairData'].keys()[0] #grab random pair_id
 	all_vars = [k for k in current_transit_dict['pairData'][example_pair_id]] #list of attributes
-	output_json = {"pairId" : []} #to be structured as a flat array for easier ML manipulation
+	output_json = {} #to be structured as a flat array for easier ML manipulation
 	for a in all_vars:
-		output_json[a] = [] #add a list for each attribute
+		var_type = type(current_transit_dict['pairData'][example_pair_id][a]) #anything that isn't a literal...
+		if var_type != list:
+			output_json[a] = [] #add a list for each attribute that is populated by simple variable types.
 	for example in current_transit_dict['pairData'].keys(): #for each id/case in the current dict
-		output_json["pairId"].append(example)
-		for a in all_vars: #for each attribute of the example
+		for a in output_json.keys(): #for each attribute of the example that we've deemed acceptable
 			output_json[a].append(current_transit_dict['pairData'][example][a]) #add to the relevant column
 	return time_string, pd.DataFrame(output_json)		
 	

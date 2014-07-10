@@ -299,37 +299,20 @@ if __name__ == "__main__":
 		for a in all_pair_ids.pair_id: #site-by-site, adding what is needed for each
 			print "Processing roadway %d" % a 
 			weather_site_name = NCDC.GetWSiteName(D, a, RoadwayCoordsDic) #which weather site is relevant?
-			if os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
-											str(a) + "_" + "Cleaned_Normalized_Weather.csv")):
-				pass #the file has been normalized with included weather
-			elif os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
-											str(a) + "_" + "Cleaned_Normalized.csv")): #weather still needed.
-				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
-							D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
-				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
-							D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
-			elif os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
-											str(a) + "_" + "Cleaned.csv")): #Normalization and weather needed.
-				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
-							D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
+			if not os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
+							str(a) + "_" + "Cleaned_Normalized.csv")): #normalization and weather still needed.
+				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
 				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['bt_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a))
+			if not os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
+							str(a) + "_" + "Cleaned_Normalized_Weather.csv")): #weather needed
+				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
+						D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
 				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
+						D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)					
 			else:
-				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
-											  D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
-				sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a)) #remove "/N" examples
-				sub_bt = data.FloatConvert(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a)) #convert strings to float where possible
-				sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
-				DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['bt_path'], five_minute_fractions, D['window']))
-				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['bt_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a))
-				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
+				pass
+
 	else: #if we need to process everything
 		data.GetBlueToad(D['bt_path'], D['bt_name']) #read it in and re-format dates
 		all_pair_ids = pd.read_csv(os.path.join(D['bt_path'], "all_pair_ids.csv"))
@@ -353,7 +336,7 @@ if __name__ == "__main__":
 										D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
 
 	day_of_week, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
-	PredictionDic = GenerateNormalizedPredictions(all_pair_ids[60:75], pairs_and_conditions, D['weather_fac_dic'], 
+	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'], 
 									day_of_week, D['pct_range'], D['time_range'], 
 									D['bt_path'], D['bt_name'], D['pct_tile_list'])
 	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, day_of_week)
