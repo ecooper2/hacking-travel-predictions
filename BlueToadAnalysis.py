@@ -47,7 +47,10 @@ def DefineDiurnalCycle(sub_bt, day, five_minute_fractions, MA_smooth_fac):
 	sub_bt['times_of_day'] = times_of_day
 	for f in five_minute_fractions:
 		sub_cycle = sub_bt[sub_bt.times_of_day == round(f,3)]
-		diurnal_cycle.append(np.mean(sub_cycle.travel_time))
+		if len(sub_cycle) == 0: #meaning there are no examples on this day of the week at this time
+			diurnal_cycle.append(diurnal_cycle[-1]) #assume the previous five-minute timestamp's time
+		else:
+			diurnal_cycle.append(np.mean(sub_cycle.travel_time))
 	return MA_Smooth_Circular(diurnal_cycle, MA_smooth_fac/2) #return after a moving-average smoothing
 	
 def GetSubBlueToad(bt, pair_id, day_of_week):
@@ -85,9 +88,6 @@ def GenerateDiurnalDic(bt, blue_toad_path, five_minute_fractions, window = 12):
 			sub_bt = GetSubBlueToad(bt, u, day)
 			DiurnalDic[str(u) + "_" + str(day)] = DefineDiurnalCycle(sub_bt, day, 
 											 five_minute_fractions, window)
-	#Write this to a .txt file as a .json
-	with open(os.path.join(blue_toad_path, 'DiurnalDictionary.txt'), 'w') as outfile:
-		json.dump(DiurnalDic, outfile)
 	return DiurnalDic
 
 def NormalizeTravelTime(bt, DiurnalDic, blue_toad_path, blue_toad_name):
@@ -287,10 +287,7 @@ if __name__ == "__main__":
 	if "no_update" in D['bt_proc']: #if, rather than process files, we wish to process only those files that need it
 		all_pair_ids = pd.read_csv(os.path.join(D['bt_path'], "all_pair_ids.csv"))
 		#all_pair_ids must exist.  The file can be shortened to only include certain roadways.
-		if os.path.exists(os.path.join(D['bt_path'], "DiurnalDictionary.txt")): #if we've already generated our diurnal dict.
-			DiurnalDic = GetJSON(D['bt_path'], "DiurnalDictionary.txt")
-		else:
-			DiurnalDic = {}
+		DiurnalDic = GetJSON(D['bt_path'], "DiurnalDictionary.txt") #on 'no update', we just read-in the Dic
 		if os.path.exists(os.path.join(D['bt_path'], "RoadwayCoordsDic.txt")):	#if we've already built it
 			RoadwayCoordsDic = GetJSON(D['bt_path'], "RoadwayCoordsDic.txt")
 		else:
@@ -334,7 +331,9 @@ if __name__ == "__main__":
 			##########weather_site_name = GetWeatherSite(lat, lon) #to determine where to fetch weather conditions							
 			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
-
+			#Write full DiurnalDictionary to a .txt file as a .json
+		with open(os.path.join(blue_toad_path, 'DiurnalDictionary.txt'), 'w') as outfile:
+			json.dump(DiurnalDic, outfile)
 	day_of_week, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'], 
 									day_of_week, D['pct_range'], D['time_range'], 
