@@ -37,16 +37,18 @@ def unique(seq, keepstr=True):
 	return t(c for c in seq if not (c in seen or seen.append(c)))
 
 def GetCurrentInfo(massdot_current, DiurnalDic):
-	"""To run a real-time prediction scheme, we must obtain three pieces of information.
+	"""To run a real-time prediction scheme, we must obtain four pieces of information.
 	The first is the current weather conditions.  We have not constructed a real-time query
 	to NOAA/NCDC.  This is probably above my pay-grade, but I can dig into it.  The second is
-	a normalized estimate of traffic conditions.  The third is the day of the week"""
+	a normalized estimate of traffic conditions.  The third is the day of the week, the fourth
+	is the time of day..."""
 	req = url.Request(massdot_current)
 	opener = url.build_opener()
 	f = opener.open(req)
 	current_time, current_data = ParseJson(json.load(f))
-	day_of_week = BTA.GetDayOfWeek(int(NCDC.GetTimeFromDateTime(dt.datetime.now(), False)))
-	time_of_day_ind = int(NCDC.GetTimeFromDateTime(dt.datetime.now(), True) * 288)
+	current_datetime = ConvertCurrentTimeToDatetime(current_time) #turn current.json string to datetime
+	day_of_week = BTA.GetDayOfWeek(int(NCDC.GetTimeFromDateTime(current_datetime, False)))
+	time_of_day_ind = int(NCDC.GetTimeFromDateTime(current_datetime, True) * 288)
 	
 	pair_cond_weather_dic = {}
 	for p, tt in zip(current_data.pairId, current_data.travelTime):
@@ -58,7 +60,17 @@ def GetCurrentInfo(massdot_current, DiurnalDic):
 		else:
 			pair_cond_weather_dic[p] = [float(tt) - DiurnalDic[p + "_" + str(day_of_week)][time_of_day_ind], ' ']
 	
-	return day_of_week, pair_cond_weather_dic
+	return day_of_week, current_datetime, pair_cond_weather_dic
+	
+def ConvertCurrentTimeToDatetime(current_time):
+	"""Given a (current_time), convert this string into the format associated with the datetime functions
+	used to manipulate times and dates.  Typically, this tuple is (year, month, day, hour, minute, second, ...)"""
+	month_dic = {'Jan' : 1, 'Feb' : 2, 'Mar' : 3, 'Apr' : 4, 'May': 5, 'Jun' : 6, 'Jul' : 7, 'Aug' : 8,
+				 'Sep' : 9, 'Oct' : 10, 'Nov' : 11, 'Dec' : 12} #ANDREW, VERIFY THESE ARE YOUR PREFIXES!
+	date, time, time_zone = current_time.split() #currently ignore time_zone, assumed to be GMT
+	month, day, year = date.split('-'); 
+	hour, minute, second = time.split(':')
+	return dt.datetime(int(year), month_dic[month], int(day), int(hour), int(minute), int(second))
 
 def GetRoadAveCoords(road_coord_list):
 	"""Lat/Lons are provided for each pair_id in the form of lists.  This function simply returns
