@@ -91,7 +91,7 @@ def ConvertWeatherDate(w_date, w_time, N, dec, d_i_m = days_in_months, ls = leap
 		day_of_year = day - 1
 	else: #This is a non-January date, that is not impacted by leap years
 		day_of_year = d_i_m[month-2] + day - 1 #so Jan 1st is 2012000.XXX, e.g.
-	time = RoundToNearestNth(w_time/2400, N, dec) #get fractional time of day, rounded...
+	time = RoundToNearestNth((w_time - w_time % 100)/2400 + (w_time % 100)/60/24, N, dec) #get fractional time of day, rounded...
 	return int(year * 1000 + day_of_year) + time
 
 def ShortestDist(LatLon_df, Lat, Lon):

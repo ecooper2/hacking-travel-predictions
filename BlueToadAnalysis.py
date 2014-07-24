@@ -199,6 +199,7 @@ def GetSub_Times_and_Days(traffic_sub_bt, current_datetime, time_range, day_of_w
 			new_day_of_week = AdjustDayOfWeek(current_day, new_day, day_of_week) #did we move into a new day?
 			correct_daytimes = correct_daytimes.append(traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week == new_day_of_week, 
 									  traffic_sub_bt.time_of_day == new_time)])
+			#print t, new_time, new_day, correct_daytimes
 	return correct_daytimes
 
 def AdjustDayOfWeek(current_day, new_day, day_of_week):
@@ -238,6 +239,11 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			#locate similar days/times, more lax search in less common weather								
 			day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, 
 								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
+			while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
+				time_range = time_range * 1.5
+				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, 
+							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
+
 			#######Generate Predictions#####
 			print "Generating Predictions for site %d" % a
 			for p in pcts: #iterate over the percentiles required for estimation
@@ -388,7 +394,7 @@ if __name__ == "__main__":
 			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
 			#Write full DiurnalDictionary to a .txt file as a .json
-		with open(os.path.join(blue_toad_path, 'DiurnalDictionary.txt'), 'w') as outfile:
+		with open(os.path.join(D['bt_path'], 'DiurnalDictionary.txt'), 'w') as outfile:
 			json.dump(DiurnalDic, outfile)
 	day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'], 
