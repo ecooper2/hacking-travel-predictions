@@ -243,28 +243,26 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 				time_range = time_range * 1.5
 				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, 
 							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
-
 			#######Generate Predictions#####
 			print "Generating Predictions for site %d" % a
-			for p in pcts: #iterate over the percentiles required for estimation
-				pred_list = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
-				for ind,f in enumerate(five_minute_fractions): #for generating of predictions at each forward step
-					viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if i + ind + 1 < L]
-					prediction_sub = sub_bt[sub_bt.index.isin(viable_future_indices)]
+			for ind,f in enumerate(five_minute_fractions): #for generating of predictions at each forward step
+				viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if i + ind + 1 < L]
+				prediction_sub = sub_bt[sub_bt.index.isin(viable_future_indices)]
+				for p in pcts: #iterate over the percentiles required for estimation
+					PredictionDic[str(a)][str(p)] = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
 					if p == 'min': #if we're estimating a best case
-						pred_list.append(np.min(prediction_sub.Normalized_t))	
+						PredictionDic[str(a)][str(p)].append(np.min(prediction_sub.Normalized_t))	
 					elif p == 'max': #if we're estimating a worst case 
-						pred_list.append(np.max(prediction_sub.Normalized_t))
+						PredictionDic[str(a)][str(p)].append(np.max(prediction_sub.Normalized_t))
 					else:
-						pred_list.append(np.percentile(prediction_sub.Normalized_t, p))	
-				PredictionDic[str(a)][str(p)] = pred_list
+						PredictionDic[str(a)][str(p)].append(np.percentile(prediction_sub.Normalized_t, p))	
 		else: #use default...essentially dead-average conditions, flagged as -0.00001 rather than zero
 			print "No current information available for site %d, using default." % a
 			pred_list = [-0.00001 for i in range(288)]
 			for p in pcts: #NOTE, WITHOUT CURRENT INFO, ALL PERCENTILES WILL BE THE SAME (DEFAULT)
 				PredictionDic[str(a)][str(p)] = pred_list
-	with open(os.path.join(bt_path, 'CurrentPredictions.txt'), 'w') as outfile:
-		json.dump(PredictionDic, outfile)
+	#with open(os.path.join(bt_path, 'CurrentPredictions.txt'), 'w') as outfile:
+	#	json.dump(PredictionDic, outfile)
 	return PredictionDic
 
 def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime):
