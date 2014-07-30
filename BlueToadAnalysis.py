@@ -8,6 +8,7 @@ import MassDotDataTypes as data
 import datetime
 import json
 import NCDC_WeatherProcessor as NCDC
+import math
 
 global five_minute_fractions
 five_minute_fractions = [round(float(f)/288,3) for f in range(288)]
@@ -243,13 +244,14 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 				time_range = time_range * 1.5
 				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, 
 							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
-			#######Generate Predictions#####
+			for p in pcts:
+				PredictionDic[str(a)][str(p)] = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
+							  #######Generate Predictions#####
 			print "Generating Predictions for site %d" % a
 			for ind,f in enumerate(five_minute_fractions): #for generating of predictions at each forward step
 				viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if i + ind + 1 < L]
 				prediction_sub = sub_bt[sub_bt.index.isin(viable_future_indices)]
 				for p in pcts: #iterate over the percentiles required for estimation
-					PredictionDic[str(a)][str(p)] = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
 					if p == 'min': #if we're estimating a best case
 						PredictionDic[str(a)][str(p)].append(np.min(prediction_sub.Normalized_t))	
 					elif p == 'max': #if we're estimating a worst case 
@@ -269,14 +271,44 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, c
 	"""Turn the normalized predictions from (PredictionDic) back into the standard-form
 	estimates by using (DiurnalDic)."""
 	UnNormDic = {}
+	time_vec = GetTimeVec(current_datetime, 288)
 	for road in PredictionDic.keys(): #iterate over all pair_ids
 		min_time = MinimumDic[road] #shortest historical travel time for a roadway
 		UnNormDic[str(road)] = {}
+		std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic)
 		for p in PredictionDic[str(road)].keys():
-			std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic)
 			norm_seq = PredictionDic[str(road)][str(p)]
-			UnNormDic[str(road)][str(p)] = [max(s + n , min_time) for s,n in zip(std_seq, norm_seq)]
+			UnNormDic[str(road)][str(p)] = {}
+			for s, n, t in zip(std_seq, norm_seq, time_vec):
+				time, day = t.split(",")
+				UnNormDic[str(road)][str(p)][time] = [int(day), max(s + n , min_time)]
 	return UnNormDic
+
+def GetTimeVec(current_datetime, ntimes):
+	""" Given a (current_datetime) of datetime format, fill a vector with 288 times of the form: 
+	"21:05,16".  In this case, "16" will represent the day of the month, which will shift
+	when the prediction crosses over into the following day.  At the end of the month, strings will
+	change from '23:55,31' to '00:00,1', e.g."""
+	five_min_steps = [5 + 5*i for i in range(ntimes)] #5, 10, 15, ..., 8640
+	time_vec = [] 
+	for f in five_min_steps:	
+		new_date = current_datetime + datetime.timedelta(minutes = f)
+		time_vec.append(NDigitString(2,new_date.hour) + ":" + NDigitString(2,new_date.minute) + "," +
+						str(new_date.day))
+	return time_vec	
+	
+def NDigitString(n, num):
+	"""Given a prescribed length of a digit string (n), turn a number (num) into the appropriate length
+	string with leading zeroes.  For instance, NDigitString(3, 12) should return '012', NDigitString(3,9)
+	should return '009', and so on."""
+	if num == 0 or num < 0: #cannot take logs of non-positive values
+		n_digits = 1 
+	else:	
+		n_digits = int(math.log(num,10)) + 1 #how many digits are found in the number?
+	if n_digits >= n: 
+		return str(num) #no need to add leading zeros
+	else:
+		return '0' * (n - n_digits) + str(num) #add the necessary leading zeros and return
 	
 def GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic):
 	"""Given the (road), (day_of_week), the (current_datetime) at which we are looking to make predictions
