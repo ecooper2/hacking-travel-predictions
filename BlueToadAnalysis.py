@@ -271,17 +271,14 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, c
 	"""Turn the normalized predictions from (PredictionDic) back into the standard-form
 	estimates by using (DiurnalDic)."""
 	UnNormDic = {}
-	time_vec = GetTimeVec(current_datetime, 288)
+	UnNormDic['Start'] = current_datetime.isoformat() #current time, each prediction is 5,10,...minutes after
 	for road in PredictionDic.keys(): #iterate over all pair_ids
 		min_time = MinimumDic[road] #shortest historical travel time for a roadway
 		UnNormDic[str(road)] = {}
 		std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic)
 		for p in PredictionDic[str(road)].keys():
 			norm_seq = PredictionDic[str(road)][str(p)]
-			UnNormDic[str(road)][str(p)] = {}
-			for s, n, t in zip(std_seq, norm_seq, time_vec):
-				time, day = t.split(",")
-				UnNormDic[str(road)][str(p)][time] = [int(day), max(s + n , min_time)]
+			UnNormDic[str(road)][str(p)] = [max(s + n , min_time) for s,n in zip(std_seq, norm_seq)]
 	return UnNormDic
 
 def GetTimeVec(current_datetime, ntimes):
