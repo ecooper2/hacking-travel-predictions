@@ -386,7 +386,8 @@ def HardCodedParameters():
 	"""Returns a dictionary of parameters we are unlikely to change..."""
 	D = {"bt_path" : os.path.join("..","..","..","Boston_Andrew","MassDothack-master", "Road_RTTM_Volume"),
 	"bt_name" : "massdot_bluetoad_data",
-	"bt_proc" : "no_update", "weather_site_name" : "closest", "weather_site_default" : "BostonAirport",
+	"bt_proc" : "no_update", "weather_site_name" : "closest", "weather_site_default" : "BostonAirport", 
+	'w_def': 'Boston, Logan International Airport ',
 	"window" : 12, #how many five-minute interval defines a suitable moving-average window
 	#bt_proc can be "no_update" if we are not processing/normalizing...otherwise the whole process ensues
 	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
@@ -395,8 +396,11 @@ def HardCodedParameters():
 	"pct_tile_list" : ['min', 10, 20, 25, 30, 50, 70, 75, 90, 'max'], #which percentiles shall be made available, 
 										#along with the best and worst-case scenarios
 	"path_to_lat_lons" : "https://github.com/apcollier/hacking-travel/blob/master/js/segments.js",
-	"path_to_current" : "http://traffichackers.com/current.json"}	
-														
+	"path_to_current" : "http://traffichackers.com/current.json",
+	"CoordsDic_name" : "RoadwayCoordsDic.txt", "NOAA_df_name" : "WeatherSites_MA.csv",
+	"WeatherInfo" : "ClosestWeatherSite.txt",
+	"WeatherURL" : "http://w1.weather.gov/xml/current_obs/"}	
+												
 	D["weather_dir"] = os.path.join(D['bt_path'], "..", "..", "NCDC_Weather")
 	return D
 	
@@ -407,13 +411,15 @@ if __name__ == "__main__":
 	#string will choose examples based on traffic and the day of week, but not weather...
 	D = HardCodedParameters()
 	if bt_proc in ['T','True','t','TRUE','yes','Y','y']: D['bt_proc'] = 'Full' #run the full update
+	NOAA_df = pd.read_csv(os.path.join(D['bt_path'], D['NOAA_df_name']))
 	if "no_update" in D['bt_proc']: #if, rather than process files, we wish to process only those files that need it
 		all_pair_ids = pd.read_csv(os.path.join(D['bt_path'], "all_pair_ids.csv"))
 		#all_pair_ids must exist.  The file can be shortened to only include certain roadways.
 		DiurnalDic = GetJSON(D['bt_path'], "DiurnalDictionary.txt") #on 'no update', we just read-in the Dic
 		MinimumDic = GetJSON(D['bt_path'], "MinimumPredictions.txt") #read in the minimum predictions
-		if os.path.exists(os.path.join(D['bt_path'], "RoadwayCoordsDic.txt")):	#if we've already built it
-			RoadwayCoordsDic = GetJSON(D['bt_path'], "RoadwayCoordsDic.txt")
+		NOAADic = GetJSON(D['bt_path'], D['WeatherInfo']) #read in the locations of closest weather sites
+		if os.path.exists(os.path.join(D['bt_path'], D['CoordsDic_name'])):	#if we've already built it
+			RoadwayCoordsDic = GetJSON(D['bt_path'], D['CoordsDic_name'])
 		else:
 			RoadwayCoordsDic = mass.GetLatLons(D['bt_path'], "Roadway_LatLonData.txt")
 			
@@ -439,6 +445,7 @@ if __name__ == "__main__":
 		all_pair_ids = pd.read_csv(os.path.join(D['bt_path'], "all_pair_ids.csv"))
 		DiurnalDic = {} #To be appended, site by site
 		MinimumDic = DefineMinimums(D, all_pair_ids)
+		NOAADic = NCDC.BuildClosestNOAADic(D['CoordsDic_name'], NOAA_df, all_pair_ids.pair_id, D) #which weather site for which roadway?
 		RoadwayCoordsDic = mass.GetLatLons(D['bt_path'], "Roadway_LatLonData.txt")
 		for a in all_pair_ids.pair_id: #process by site, 
 			weather_site_name = NCDC.GetWSiteName(D, a, RoadwayCoordsDic) #which weather site is relevant?
@@ -460,6 +467,7 @@ if __name__ == "__main__":
 		with open(os.path.join(D['bt_path'], 'DiurnalDictionary.txt'), 'w') as outfile:
 			json.dump(DiurnalDic, outfile)
 	day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
+	pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)	
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'], 
 									day_of_week, current_datetime, D['pct_range'], D['time_range'], 
 									D['bt_path'], D['bt_name'], D['pct_tile_list'], subset)

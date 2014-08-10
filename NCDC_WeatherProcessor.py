@@ -7,6 +7,9 @@ import os
 import pandas as pd
 import numpy as np
 import BlueToadAnalysis as BTA
+import math
+import urllib2 as url
+import BeautifulSoup as SOUP
 
 global days_in_months 
 global leaps
@@ -72,6 +75,38 @@ def GetType(w):
 	else:
 		return ' ' #clear weather
 		
+def RealTimeWeather(D, NOAADic, NOAA_df, pairs_conds):
+	"""Given a dictionary describing which weather site should be used for each roadway (NOAADic), a dictionary of the
+	conditions at each pair (pairs_conds), and a third dictionary containing defaul parameters (D), return the generalized
+	weather conditions at each site."""
+	for roadway in pairs_conds.keys(): #each roadway	
+		if roadway in NOAADic.keys():
+			closest_site = NOAADic[roadway]
+			if closest_site == D['weather_site_default']: closest_site = D['w_def'] #convert to the site in NOAA_df
+		else: #if our dictionary does not contain the closest site to...
+			closest_site = D['w_def']
+		index = list(NOAA_df.Location).index(closest_site)
+		radio_code = NOAA_df.Code[index] #four letter code used for weather website definition
+		pairs_conds[roadway][-1] = GetRealTimeFromSite(D['WeatherURL'], radio_code)	
+	return pairs_conds	
+	
+def GetRealTimeFromSite(weather_url, radio_code):
+	"""Given a four-letter (radio_code) string for NOAA, return the current weather conditions as one of four classifications
+	from the site within the (weather_url) webspace."""
+	page = url.urlopen(weather_url + radio_code + ".rss")
+	parsed_page = SOUP.BeautifulSoup(page)
+	titles = parsed_page.findAll('title') #grab the bullet points from the key page	
+	weather_tag = titles[-1] #the last title should contain the weather
+	w = weather_tag.contents[0].strip() #contains "Partly Cloudy and 83 F at..."
+	if 'Snow' in w or 'Ice' in w or 'Freezing' in w: #this all becomes the "SNOW" heading
+		return 'SN'
+	elif 'Rain' in w or 'Thunderstorm' in w: #this all becomes the "RAIN/STORM" heading
+		return 'RA'
+	elif 'Fog' in w or 'Haze' in w or 'Dust' in w or 'Funnel' in w or 'Tornado' in w: #fog, haze, mist, wind...
+		return 'FG'
+	else:
+		return ' ' #clear weather
+		
 def RoundToNearestNth(val, N, dec):
 	"""Given a (val), round to the nearest (N)th fraction to (dec) decimal places,
 	for instance, 100.139 to the nearest 20th, to 3 places, is: 100.150."""
@@ -108,12 +143,41 @@ def GetWSiteName(D, a, RoadwayCoordsDic):
 	if D['weather_site_name'] != 'closest': #i.e. if this is already filled with a site name
 		return D['weather_site_name']
 	else: #we need to choose the appropriate NCDC climate gauge
-		w_site_coords = pd.read_csv(os.path.join(D['bt_path'],"WeatherSite_Coords.csv"))
+		w_site_coords = pd.read_csv(os.path.join(D['bt_path'],"WeatherSites_Coords.csv"))
 		if str(a) in RoadwayCoordsDic.keys(): #if these roadways' coordinates are listed
 			lat, lon = RoadwayCoordsDic[str(a)]['Lat'], RoadwayCoordsDic[str(a)]['Lon']
 			return w_site_coords.Site[ShortestDist(w_site_coords, lat, lon)]
 		else:
 			return D['weather_site_default']
+
+def BuildClosestNOAADic(CoordsDic_name, NOAA_df, pair_ids, D):
+	"""Given a list of (pair_ids), and the name of a dictionary of roadway coordinates (CoordsDic_name), combine with a list of
+	NOAA sites and their locations (NOAA_df_name) and write a dictionary to file that contains the closest weather locations for
+	real-time weather information for each roadway.  If no coordinates are available, the chosen site should be "XXXXX" and a default
+	shall be chosen from (D)."""
+	RoadwayCoords = BTA.GetJSON(D['bt_path'], CoordsDic_name);
+	NOAA_site_dic = {}
+	for p in pair_ids:
+		NOAA_site_dic[str(p)] = ChooseClosestSite(p, RoadwayCoords, NOAA_df, D) #whichever weather site is closest in Euclidean terms
+	with open(os.path.join(D['bt_path'], 'ClosestWeatherSite.txt'), 'w') as outfile:
+		json.dump(NOAA_site_dic, outfile)
+	return NOAA_site_dic
+	
+def ChooseClosestSite(roadway, RoadwayCoords, NOAA_df, D):
+	"""Given a (roadway), a dictionary (RoadwayCoords) containing the lat/lon of roadways, a dictionary (D) containing the default 
+	location to use if the roadway's coordinates are unknown, and a list of NOAA sites and their lat/lon coordinates (NOAA_duf)
+	return the closest site in terms of euclidian distance."""
+	if str(roadway) not in RoadwayCoords.keys(): #if this roadway does not contain coordinates for use, return the default site	
+		return D['weather_site_default']
+	else:
+		road_lat, road_lon = RoadwayCoords[str(roadway)]['Lat'], RoadwayCoords[str(roadway)]['Lon']
+	min_dist = 9999; closest_site = D['weather_site_default']
+	for lat, lon, site in zip(NOAA_df.Lat, NOAA_df.Lon, NOAA_df['Location']):
+		euclidian_dist = math.sqrt((lat-road_lat)**2 + (lon-road_lon)**2)
+		if euclidian_dist < min_dist: #if this is the closest site we've seen
+			min_dist = euclidian_dist; closest_site = site
+	return closest_site
+	
 			
 def GetWeatherData(weather_dir, site_name):
 	"""Given the (site_name) of the relevant weather site ("BostonAirport", e.g.), and the
