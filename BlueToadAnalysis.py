@@ -475,4 +475,5 @@ if __name__ == "__main__":
 	with open(os.path.join(D['bt_path'], 'CurrentPredictions.txt'), 'w') as outfile:
 		json.dump(CurrentPredDic, outfile)
 
+		#https://github.com/hackreduce/MassDOThack/blob/master/Road_RTTM_Volume/massdot_bluetoad_data.zip
 	
