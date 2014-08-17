@@ -1,6 +1,6 @@
 # hacking-travel-predictions
 
-Generates 24 hour predictions based on [real time traffic data](http://traffichackers.com/current.json) and a [historical archive of past traffic](https://github.com/hackreduce/MassDOThack/blob/master/Road_RTTM_Volume/massdot_bluetoad_data.zip).
+Generates roadway travel time and speed predictions for the next 24 hours based on [real time traffic data](http://traffichackers.com/current.json) and a [historical archive of past traffic](https://github.com/hackreduce/MassDOThack/blob/master/Road_RTTM_Volume/massdot_bluetoad_data.zip).
 
 ## Background
 
@@ -17,7 +17,7 @@ Are the estimates perfect?  In a word, no.  Are they a significant improvement o
 
 ## Getting started
 
-The main module is BlueToadAnalysis.py, called primarily from the command line with two input arguments detailing the quantity of existing data available for use and the features to be employed for generating the relevant predictions.  A sample call appears below:
+Make sure you have [Python (2.7.x)](https://www.python.org/downloads/) and [pip](https://pip.pypa.io/en/latest/installing.html) installed, then:
 
 1.  Install python modules
 
@@ -31,9 +31,11 @@ The main module is BlueToadAnalysis.py, called primarily from the command line w
   $ python BlueToadAnalysis.py 'scratch' TDW
   ```
 
+The above BlueToadAnalysis.py command runs the model from scratch, downloading supporting data as necessary, and generated predictions based on current traffic, the current day of the week, and the current weather.
+
 ## Reference
 
-The main module, BlueToadAnalysis.py, takes two arguments.  The first argument can be set to one of the following:
+The main module is BlueToadAnalysis.py, called primarily from the command line with two input arguments **(a)** detailing the quantity of existing data available for use and **(b)** the features to be employed for generating the relevant predictions.  The first argument can be set to one of the following:
 
   * **'no update'** - All necessary pre-processing has already occurred (the appropriate dictionaries have already been
   created, the historical data files have been cleaned, normalized, and integrated with existing weather data, etc).
