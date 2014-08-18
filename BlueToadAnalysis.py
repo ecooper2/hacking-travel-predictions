@@ -371,22 +371,24 @@ def DefineMinimums(D, all_pair_ids):
 	MinimumDic = {}
 	for a in all_pair_ids.pair_id:
 		print "Definining minimum travel times for roadway %d" % a
-		processed_file_path = os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
+		processed_file_path = os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" +
 							str(a) + "_" + "Cleaned_Normalized_Weather.csv")
 		if os.path.exists(processed_file_path):
 			site_df = pd.read_csv(processed_file_path)
 			MinimumDic[str(a)] = np.min(site_df.travel_time)
 		else:
 			MinimumDic[str(a)] = 0.001 #the flag for a missing minimum time (avoids division by 0)
-	with open(os.path.join(D['bt_path'], 'MinimumPredictions.txt'), 'w') as outfile:
+	with open(os.path.join(D['update_path'], 'MinimumPredictions.txt'), 'w') as outfile:
 		json.dump(MinimumDic, outfile)
 	return MinimumDic
 
 def HardCodedParameters():
 	"""Returns a dictionary of parameters we are unlikely to change..."""
-	D = {"bt_path" : os.path.join("..","..","..","Boston_Andrew","MassDothack-master", "Road_RTTM_Volume"),
+	D = {"bt_path" : os.path.join("scratch"),
+	"update_path" : os.path.join("update"),
+	"data_path" : os.path.join("data"),
 	"bt_name" : "massdot_bluetoad_data",
-	"bt_proc" : "no_update", "weather_site_name" : "closest", "weather_site_default" : "BostonAirport", 
+	"weather_site_name" : "closest", "weather_site_default" : "BostonAirport", 
 	'w_def': 'Boston, Logan International Airport ',
 	"window" : 12, #how many five-minute interval defines a suitable moving-average window
 	#bt_proc can be "no_update" if we are not processing/normalizing...otherwise the whole process ensues
@@ -399,9 +401,10 @@ def HardCodedParameters():
 	"path_to_current" : "http://traffichackers.com/current.json",
 	"CoordsDic_name" : "RoadwayCoordsDic.txt", "NOAA_df_name" : "WeatherSites_MA.csv",
 	"WeatherInfo" : "ClosestWeatherSite.txt",
-	"WeatherURL" : "http://w1.weather.gov/xml/current_obs/"}	
+	"WeatherURL" : "http://w1.weather.gov/xml/current_obs/",
+	"path_to_blue_toad" : "https://github.com/hackreduce/MassDOThack/blob/master/Road_RTTM_Volume/massdot_bluetoad_data.zip"}	
 												
-	D["weather_dir"] = os.path.join(D['bt_path'], "..", "..", "NCDC_Weather")
+	D["weather_dir"] = os.path.join(D['bt_path'], "NCDC_Weather")
 	return D
 	
 if __name__ == "__main__":
@@ -410,70 +413,69 @@ if __name__ == "__main__":
 	#are invoked by including the letters in the input string, subset.  For example.  Using 'TD' as the
 	#string will choose examples based on traffic and the day of week, but not weather...
 	D = HardCodedParameters()
-	if bt_proc in ['T','True','t','TRUE','yes','Y','y']: D['bt_proc'] = 'Full' #run the full update
-	NOAA_df = pd.read_csv(os.path.join(D['bt_path'], D['NOAA_df_name']))
-	if "no_update" in D['bt_proc']: #if, rather than process files, we wish to process only those files that need it
-		all_pair_ids = pd.read_csv(os.path.join(D['bt_path'], "all_pair_ids.csv"))
+	NOAA_df = pd.read_csv(os.path.join(D['data_path'], D['NOAA_df_name']))
+	if bt_proc in ['update', 'Update', 'UPDATE', 'u', 'U']: #run the full update
+		all_pair_ids = pd.read_csv(os.path.join(D['update_path'], "all_pair_ids.csv"))
 		#all_pair_ids must exist.  The file can be shortened to only include certain roadways.
-		DiurnalDic = GetJSON(D['bt_path'], "DiurnalDictionary.txt") #on 'no update', we just read-in the Dic
-		MinimumDic = GetJSON(D['bt_path'], "MinimumPredictions.txt") #read in the minimum predictions
-		NOAADic = GetJSON(D['bt_path'], D['WeatherInfo']) #read in the locations of closest weather sites
-		if os.path.exists(os.path.join(D['bt_path'], D['CoordsDic_name'])):	#if we've already built it
-			RoadwayCoordsDic = GetJSON(D['bt_path'], D['CoordsDic_name'])
+		DiurnalDic = GetJSON(D['update_path'], "DiurnalDictionary.txt") #on 'no update', we just read-in the Dic
+		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
+		NOAADic = GetJSON(D['update_path'], D['WeatherInfo']) #read in the locations of closest weather sites
+		if os.path.exists(os.path.join(D['update_path'], D['CoordsDic_name'])):	#if we've already built it
+			RoadwayCoordsDic = GetJSON(D['update_path'], D['CoordsDic_name'])
 		else:
-			RoadwayCoordsDic = mass.GetLatLons(D['bt_path'], "Roadway_LatLonData.txt")
+			RoadwayCoordsDic = mass.GetLatLons(D['data_path'], "Roadway_LatLonData.txt")
 			
 		for a in all_pair_ids.pair_id: #site-by-site, adding what is needed for each
 			print "Processing roadway %d" % a 
-			if not os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
+			if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" +
 							str(a) + "_" + "Cleaned_Normalized.csv")): #normalization and weather still needed.
-				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
-				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['bt_path'], "IndividualFiles"), 
+				sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
+				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['update_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a))
-			if not os.path.exists(os.path.join(D['bt_path'], "IndividualFiles", D['bt_name'] + "_" +
+			if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" +
 							str(a) + "_" + "Cleaned_Normalized_Weather.csv")): #weather needed
 				weather_site_name = NCDC.GetWSiteName(D, a, RoadwayCoordsDic) #which weather site is relevant?
-				sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
+				sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", 
 						D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
-				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), 
 						D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)					
 			else:
 				pass
 
-	else: #if we need to process everything
+	elif bt_proc in ['no update', 'no_update', 'No_Update', 'n', 'N']: #if we need to process everything
 		data.GetBlueToad(D['bt_path'], D['bt_name']) #read it in and re-format dates
-		all_pair_ids = pd.read_csv(os.path.join(D['bt_path'], "all_pair_ids.csv"))
+		all_pair_ids = pd.read_csv(os.path.join(D['update_path'], "all_pair_ids.csv"))
 		DiurnalDic = {} #To be appended, site by site
 		MinimumDic = DefineMinimums(D, all_pair_ids)
-		NOAADic = NCDC.BuildClosestNOAADic(D['CoordsDic_name'], NOAA_df, all_pair_ids.pair_id, D) #which weather site for which roadway?
-		RoadwayCoordsDic = mass.GetLatLons(D['bt_path'], "Roadway_LatLonData.txt")
+		NOAADic = NCDC.BuildClosestNOAADic(NOAA_df, all_pair_ids.pair_id, D) #which weather site for which roadway?
+		RoadwayCoordsDic = mass.GetLatLons(D['data_path'], "Roadway_LatLonData.txt")
 		for a in all_pair_ids.pair_id: #process by site, 
 			weather_site_name = NCDC.GetWSiteName(D, a, RoadwayCoordsDic) #which weather site is relevant?
-			sub_bt = pd.read_csv(os.path.join(D['bt_path'], "IndividualFiles", 
+			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", 
 											  D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
-			sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+			sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a)) #remove "/N" examples
-			sub_bt = data.FloatConvert(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+			sub_bt = data.FloatConvert(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a)) #convert strings to float where possible
-			sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+			sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
-			DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['bt_path'], five_minute_fractions, D['window']))
-			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['bt_path'], "IndividualFiles"), 
+			DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['update_path'], five_minute_fractions, D['window']))
+			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['update_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a))
 			##########weather_site_name = GetWeatherSite(lat, lon) #to determine where to fetch weather conditions							
-			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['bt_path'], "IndividualFiles"), 
+			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), 
 										D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
 			#Write full DiurnalDictionary to a .txt file as a .json
-		with open(os.path.join(D['bt_path'], 'DiurnalDictionary.txt'), 'w') as outfile:
+		with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'w') as outfile:
 			json.dump(DiurnalDic, outfile)
 	day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
 	pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)	
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'], 
 									day_of_week, current_datetime, D['pct_range'], D['time_range'], 
-									D['bt_path'], D['bt_name'], D['pct_tile_list'], subset)
+									D['update_path'], D['bt_name'], D['pct_tile_list'], subset)
 	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime)
-	with open(os.path.join(D['bt_path'], 'CurrentPredictions.txt'), 'w') as outfile:
+	with open(os.path.join(D['update_path'], 'CurrentPredictions.txt'), 'w') as outfile:
 		json.dump(CurrentPredDic, outfile)
 
-		#https://github.com/hackreduce/MassDOThack/blob/master/Road_RTTM_Volume/massdot_bluetoad_data.zip
+		
 	
