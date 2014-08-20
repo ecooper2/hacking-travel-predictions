@@ -473,7 +473,7 @@ if __name__ == "__main__":
 
 	elif bt_proc in ['update', 'Update', 'UPDATE', 'u', 'U']: #if we need to process everything
 		data.GetBlueToad(D['bt_path'], D['bt_name']) #read it in and re-format dates
-		all_pair_ids = pd.read_csv(os.path.join(D['update_path'], "all_pair_ids.csv"))
+		all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
 		DiurnalDic = {} #To be appended, site by site
 		MinimumDic = DefineMinimums(D, all_pair_ids)
 		NOAADic = NCDC.BuildClosestNOAADic(NOAA_df, all_pair_ids.pair_id, D) #which weather site for which roadway?
