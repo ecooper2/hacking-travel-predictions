@@ -9,7 +9,9 @@ import datetime
 import json
 import NCDC_WeatherProcessor as NCDC
 import math
-
+import zipfile as Z
+from urllib2 import urlopen, URLError, HTTPError
+	
 global five_minute_fractions
 five_minute_fractions = [round(float(f)/288,3) for f in range(288)]
 
@@ -382,6 +384,29 @@ def DefineMinimums(D, all_pair_ids):
 		json.dump(MinimumDic, outfile)
 	return MinimumDic
 
+def GetZip(url):
+	"""Download a .zip file found at the (url) provided."""
+	try: # Open the url
+		f = urlopen(url)
+		print "downloading " + url
+		with open(os.path.join(D['bt_path'], "massdot_bluetoad_data.zip"), "wb") as local_file: # Open our local file for writing
+			local_file.write(f.read())
+	#handle errors
+	except HTTPError, e:
+		print "HTTP Error:", e.code, url
+	except URLError, e:
+		print "URL Error:", e.reason, url
+	return None
+	
+def Unzip(fname, out_path):
+	"""Unzip the file provided (fname), and write to a file in the (out_path) directory."""
+	fh = open(os.path.join(out_path,fname + ".zip"), 'rb')
+	z = Z.ZipFile(fh)
+	for name in z.namelist():
+		print "Extracting %s" % name; z.extract(name, out_path) #extract the file
+	fh.close()
+	return None
+
 def HardCodedParameters():
 	"""Returns a dictionary of parameters we are unlikely to change..."""
 	D = {"bt_path" : os.path.join("scratch"),
@@ -402,7 +427,7 @@ def HardCodedParameters():
 	"CoordsDic_name" : "RoadwayCoordsDic.txt", "NOAA_df_name" : "WeatherSites_MA.csv",
 	"WeatherInfo" : "ClosestWeatherSite.txt",
 	"WeatherURL" : "http://w1.weather.gov/xml/current_obs/",
-	"path_to_blue_toad" : "https://github.com/hackreduce/MassDOThack/blob/master/Road_RTTM_Volume/massdot_bluetoad_data.zip"}	
+	"path_to_blue_toad" : "https://raw.githubusercontent.com/hackreduce/MassDOThack/master/Road_RTTM_Volume/massdot_bluetoad_data.zip"}	
 												
 	D["weather_dir"] = os.path.join(D['bt_path'], "NCDC_Weather")
 	return D
@@ -414,6 +439,10 @@ if __name__ == "__main__":
 	#string will choose examples based on traffic and the day of week, but not weather...
 	D = HardCodedParameters()
 	NOAA_df = pd.read_csv(os.path.join(D['data_path'], D['NOAA_df_name']))
+	if bt_proc in ['scratch', 'Scratch', 'SCRATCH', 's', 'S']: #download all data, then run a full update.
+		url = D['path_to_blue_toad']
+		GetZip(url); Unzip(D['bt_name'], D['bt_path']) #download the file, and unzip it.
+		bt_proc = 'U' #to ensure we'll run the update.
 	if bt_proc in ['update', 'Update', 'UPDATE', 'u', 'U']: #run the full update
 		all_pair_ids = pd.read_csv(os.path.join(D['update_path'], "all_pair_ids.csv"))
 		#all_pair_ids must exist.  The file can be shortened to only include certain roadways.
