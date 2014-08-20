@@ -443,7 +443,7 @@ if __name__ == "__main__":
 		url = D['path_to_blue_toad']
 		GetZip(url); Unzip(D['bt_name'], D['bt_path']) #download the file, and unzip it.
 		bt_proc = 'U' #to ensure we'll run the update.
-	if bt_proc in ['update', 'Update', 'UPDATE', 'u', 'U']: #run the full update
+	if bt_proc in ['no update', 'no_update', 'No_Update', 'n', 'N']: #run the full update
 		all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
 		#all_pair_ids must exist.  The file can be shortened to only include certain roadways.
 		DiurnalDic = GetJSON(D['update_path'], "DiurnalDictionary.txt") #on 'no update', we just read-in the Dic
@@ -471,7 +471,7 @@ if __name__ == "__main__":
 			else:
 				pass
 
-	elif bt_proc in ['no update', 'no_update', 'No_Update', 'n', 'N']: #if we need to process everything
+	elif bt_proc in ['update', 'Update', 'UPDATE', 'u', 'U']: #if we need to process everything
 		data.GetBlueToad(D['bt_path'], D['bt_name']) #read it in and re-format dates
 		all_pair_ids = pd.read_csv(os.path.join(D['update_path'], "all_pair_ids.csv"))
 		DiurnalDic = {} #To be appended, site by site
