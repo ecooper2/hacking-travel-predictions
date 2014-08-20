@@ -445,7 +445,7 @@ if __name__ == "__main__":
 		GetZip(url); Unzip(D['bt_name'], D['bt_path']) #download the file, and unzip it.
 		bt_proc = 'U' #to ensure we'll run the update.
 	if bt_proc in ['update', 'Update', 'UPDATE', 'u', 'U']: #run the full update
-		all_pair_ids = pd.read_csv(os.path.join(D['update_path'], "all_pair_ids.csv"))
+		all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
 		#all_pair_ids must exist.  The file can be shortened to only include certain roadways.
 		DiurnalDic = GetJSON(D['update_path'], "DiurnalDictionary.txt") #on 'no update', we just read-in the Dic
 		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
