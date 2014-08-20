@@ -10,6 +10,7 @@ import json
 import NCDC_WeatherProcessor as NCDC
 import math
 import zipfile as Z
+import sys
 from urllib2 import urlopen, URLError, HTTPError
 	
 global five_minute_fractions
