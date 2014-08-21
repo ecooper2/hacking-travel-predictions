@@ -473,6 +473,8 @@ if __name__ == "__main__":
 				pass
 
 	elif bt_proc in ['update', 'Update', 'UPDATE', 'u', 'U']: #if we need to process everything
+		if not os.path.exists(os.path.join(D["update_path"], "IndividualFiles")):
+			os.makedirs(os.path.join(D["update_path"], "IndividualFiles"))
 		data.GetBlueToad(D['bt_path'], D['bt_name']) #read it in and re-format dates
 		all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
 		DiurnalDic = {} #To be appended, site by site

@@ -35,5 +35,8 @@ nosetests.xml
 .project
 .pydevproject
 
-scratch/ #Stores the large blue toad analysis files in their zipped or unzipped forms
-update/ #Stores various files created (if necessary) during runtime
+# Stores the large blue toad analysis files in their zipped or unzipped forms
+scratch/
+
+# Stores various files created (if necessary) during runtime 
+update/
