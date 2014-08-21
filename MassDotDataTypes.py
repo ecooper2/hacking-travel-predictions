@@ -70,8 +70,8 @@ def GetRoadVolume_Historical(file_path, Cleaned, file_name):
 	else: #if the file is already cleaned - simply read it into memory and return it
 		return pd.read_csv(file_path, file_name + "_Cleaned.csv")
 		
-def GetBlueToad(file_path, file_name):
-	"""(file_path) denotes a relative path to the cleaned or uncleaned file. (file_name) is the name
+def GetBlueToad(D, file_name):
+	"""(D) contains the relative path to the cleaned or uncleaned file. (file_name) is the name
 	of the file within that directory.
 	
 	pair_id: Identifies a pair of bluetooth sensors in a particular direction, Ex: 60, type = int
@@ -86,14 +86,14 @@ def GetBlueToad(file_path, file_name):
 	days_in_month = np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]) #to covert into day_of_year		
 	leap_years = [1900 + 4*x for x in range(50)] #runs until 2096 for potential leap_years
 
-	BlueToad_df = pd.read_csv(os.path.join(file_path, file_name + ".csv"))
+	BlueToad_df = pd.read_csv(os.path.join(D['bt_path'], file_name + ".csv"))
 	#if we haven't found generated unique ids to be used to break the massive data file into its constituents
-	if os.path.exists(os.path.join(file_path, "all_pair_ids.csv")): 	
-		all_pair_ids = pd.read_csv(os.path.join(file_path, "all_pair_ids.csv"))
+	if os.path.exists(os.path.join(D['data_path'], "all_pair_ids.csv")): 	
+		all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
 	else:
 		all_pair_ids = mass.unique(BlueToad_df.pair_id)
 		all_pair_ids = pd.DataFrame({"pair_id" : all_pair_ids})
-		all_pair_ids.to_csv(os.path.join(file_path, "all_pair_ids.csv"), index = False)
+		all_pair_ids.to_csv(os.path.join(D['data_path'], "all_pair_ids.csv"), index = False)
 	#Now, convert our dates to the relevant format
 	for a in all_pair_ids.pair_id:
 		sub_bt = BlueToad_df[BlueToad_df.pair_id == a]
@@ -106,7 +106,7 @@ def GetBlueToad(file_path, file_name):
 			cleaned_dates.append(num_date)
 		sub_bt.insert_time = cleaned_dates #replace with suitable numerical, ordinal dates
 		del(cleaned_dates) #to conserve memory
-		sub_bt.to_csv(os.path.join(file_path, "IndividualFiles", file_name + "_" + str(a) + "_Cleaned.csv"),
+		sub_bt.to_csv(os.path.join(D['update_path'], "IndividualFiles", file_name + "_" + str(a) + "_Cleaned.csv"),
 							index = False)
 	return None	
 
