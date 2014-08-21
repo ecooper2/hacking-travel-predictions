@@ -440,6 +440,8 @@ if __name__ == "__main__":
 	#string will choose examples based on traffic and the day of week, but not weather...
 	D = HardCodedParameters()
 	NOAA_df = pd.read_csv(os.path.join(D['data_path'], D['NOAA_df_name']))
+	if not os.path.exists(os.path.join(D["update_path"])) os.makedirs(os.path.join(D["update_path"])) #add directories if missing
+	if not os.path.exists(os.path.join(D["bt_path"])) os.makedirs(os.path.join(D["bt_path"]))	
 	if bt_proc in ['scratch', 'Scratch', 'SCRATCH', 's', 'S']: #download all data, then run a full update.
 		url = D['path_to_blue_toad']
 		GetZip(url); Unzip(D['bt_name'], D['bt_path']) #download the file, and unzip it.
@@ -473,8 +475,7 @@ if __name__ == "__main__":
 				pass
 
 	elif bt_proc in ['update', 'Update', 'UPDATE', 'u', 'U']: #if we need to process everything
-		if not os.path.exists(os.path.join(D["update_path"], "IndividualFiles")):
-			os.makedirs(os.path.join(D["update_path"], "IndividualFiles"))
+		if not os.path.exists(os.path.join(D["update_path"], "IndividualFiles")): os.makedirs(os.path.join(D["update_path"], "IndividualFiles"))
 		data.GetBlueToad(D['bt_path'], D['bt_name']) #read it in and re-format dates
 		all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
 		DiurnalDic = {} #To be appended, site by site
