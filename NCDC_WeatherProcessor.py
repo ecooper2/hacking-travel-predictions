@@ -10,6 +10,7 @@ import BlueToadAnalysis as BTA
 import math
 import urllib2 as url
 import BeautifulSoup as SOUP
+import json
 
 global days_in_months 
 global leaps
@@ -143,7 +144,7 @@ def GetWSiteName(D, a, RoadwayCoordsDic):
 	if D['weather_site_name'] != 'closest': #i.e. if this is already filled with a site name
 		return D['weather_site_name']
 	else: #we need to choose the appropriate NCDC climate gauge
-		w_site_coords = pd.read_csv(os.path.join(D['data_path'],"WeatherSites_Coords.csv"))
+		w_site_coords = pd.read_csv(os.path.join(D['data_path'],"WeatherSite_Coords.csv"))
 		if str(a) in RoadwayCoordsDic.keys(): #if these roadways' coordinates are listed
 			lat, lon = RoadwayCoordsDic[str(a)]['Lat'], RoadwayCoordsDic[str(a)]['Lon']
 			return w_site_coords.Site[ShortestDist(w_site_coords, lat, lon)]
@@ -155,7 +156,7 @@ def BuildClosestNOAADic(NOAA_df, pair_ids, D):
 	NOAA sites and their locations (NOAA_df_name) and write a dictionary to file that contains the closest weather locations for
 	real-time weather information for each roadway.  If no coordinates are available, the chosen site should be "XXXXX" and a default
 	shall be chosen from (D)."""
-	RoadwayCoords = BTA.GetJSON(D['update_path'], D['CoordsDic_name']);
+	RoadwayCoords = BTA.GetJSON(D['data_path'], D['CoordsDic_name']);
 	NOAA_site_dic = {}
 	for p in pair_ids:
 		NOAA_site_dic[str(p)] = ChooseClosestSite(p, RoadwayCoords, NOAA_df, D) #whichever weather site is closest in Euclidean terms

@@ -430,11 +430,11 @@ def HardCodedParameters():
 	"WeatherURL" : "http://w1.weather.gov/xml/current_obs/",
 	"path_to_blue_toad" : "https://raw.githubusercontent.com/hackreduce/MassDOThack/master/Road_RTTM_Volume/massdot_bluetoad_data.zip"}	
 												
-	D["weather_dir"] = os.path.join(D['bt_path'], "NCDC_Weather")
+	D["weather_dir"] = os.path.join(D['data_path'], "NCDC_Weather")
 	return D
 	
 if __name__ == "__main__":
-	script_name, bt_proc, subset = sys.argv #for the subset variable the following options are available:
+	script_name, subset = sys.argv #for the subset variable the following options are available:
 	#'W' - weather, 'T' - traffic conditions, 'D' - day of week, 'S' - Sat/Sun vs. Mon-Fri.  The options
 	#are invoked by including the letters in the input string, subset.  For example.  Using 'TD' as the
 	#string will choose examples based on traffic and the day of week, but not weather...
@@ -442,62 +442,42 @@ if __name__ == "__main__":
 	NOAA_df = pd.read_csv(os.path.join(D['data_path'], D['NOAA_df_name']))
 	if not os.path.exists(os.path.join(D["update_path"])): os.makedirs(os.path.join(D["update_path"])) #add directories if missing
 	if not os.path.exists(os.path.join(D["bt_path"])): os.makedirs(os.path.join(D["bt_path"]))	
-	if bt_proc in ['scratch', 'Scratch', 'SCRATCH', 's', 'S']: #download all data, then run a full update.
-		url = D['path_to_blue_toad']
-		GetZip(url); Unzip(D['bt_name'], D['bt_path']) #download the file, and unzip it.
-		bt_proc = 'U' #to ensure we'll run the update.
-	if bt_proc in ['no update', 'no_update', 'No_Update', 'n', 'N']: #run the full update
-		all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
-		#all_pair_ids must exist.  The file can be shortened to only include certain roadways.
-		DiurnalDic = GetJSON(D['update_path'], "DiurnalDictionary.txt") #on 'no update', we just read-in the Dic
-		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
-		NOAADic = GetJSON(D['update_path'], D['WeatherInfo']) #read in the locations of closest weather sites
-		if os.path.exists(os.path.join(D['update_path'], D['CoordsDic_name'])):	#if we've already built it
-			RoadwayCoordsDic = GetJSON(D['update_path'], D['CoordsDic_name'])
-		else:
-			RoadwayCoordsDic = mass.GetLatLons(D['data_path'], "Roadway_LatLonData.txt")
-			
-		for a in all_pair_ids.pair_id: #site-by-site, adding what is needed for each
-			print "Processing roadway %d" % a 
-			if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" +
-							str(a) + "_" + "Cleaned_Normalized.csv")): #normalization and weather still needed.
-				sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
-				sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['update_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a))
-			if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" +
-							str(a) + "_" + "Cleaned_Normalized_Weather.csv")): #weather needed
-				weather_site_name = NCDC.GetWSiteName(D, a, RoadwayCoordsDic) #which weather site is relevant?
-				sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", 
-						D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
-				sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), 
-						D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)					
-			else:
-				pass
-
-	elif bt_proc in ['update', 'Update', 'UPDATE', 'u', 'U']: #if we need to process everything
-		if not os.path.exists(os.path.join(D["update_path"], "IndividualFiles")): os.makedirs(os.path.join(D["update_path"], "IndividualFiles"))
-		data.GetBlueToad(D, D['bt_name']) #read it in and re-format dates
-		all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
+	if not os.path.exists(os.path.join(D['bt_path'], D['bt_name'] + ".zip")): #download all data, then run a full update if it does not exist.
+		if not os.path.exists(os.path.join(D['bt_path'], D['bt_name'] + ".csv")):
+			url = D['path_to_blue_toad']
+			GetZip(url); Unzip(D['bt_name'], D['bt_path']) #download the file, and unzip it.
+	if not os.path.exists(os.path.join(D["update_path"], "IndividualFiles")): os.makedirs(os.path.join(D["update_path"], "IndividualFiles"))
+	data.GetBlueToad(D, D['bt_name']) #read it in and re-format dates
+	all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
+	if not os.path.exists(os.path.join(D['update_path'], 'DiurnalDic.txt')): #if this dictionary doesn't exist, we'll fill it 
 		DiurnalDic = {} #To be appended, site by site
-		MinimumDic = DefineMinimums(D, all_pair_ids)
-		NOAADic = NCDC.BuildClosestNOAADic(NOAA_df, all_pair_ids.pair_id, D) #which weather site for which roadway?
+	else: #just read it it from file
+		DiurnalDic = GetJSON(D['update_path'], "DiurnalDictionary.txt")
+	if not os.path.exists(os.path.join(D['update_path'], 'MinimumPredictions.txt')): #if we lack minimums for each site
+		MinimumDic = DefineMinimums(D, all_pair_ids) 
+	else:
+		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
+	if os.path.exists(os.path.join(D['update_path'], D['CoordsDic_name'])):	#if we've already built it
+		RoadwayCoordsDic = GetJSON(D['update_path'], D['CoordsDic_name'])
+	else:
 		RoadwayCoordsDic = mass.GetLatLons(D['data_path'], "Roadway_LatLonData.txt")
-		for a in all_pair_ids.pair_id: #process by site, 
-			weather_site_name = NCDC.GetWSiteName(D, a, RoadwayCoordsDic) #which weather site is relevant?
-			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", 
-											  D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
-			sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a)) #remove "/N" examples
-			sub_bt = data.FloatConvert(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a)) #convert strings to float where possible
-			sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
+	if not os.path.exists(os.path.join(D['update_path'], D['WeatherInfo'])): #if we lack minimums for each site
+		NOAADic = NCDC.BuildClosestNOAADic(NOAA_df, all_pair_ids.pair_id, D) #which weather site for which roadway?
+	else:
+		NOAADic = GetJSON(D['update_path'], D['WeatherInfo']) #read in the locations of closest weather sites
+	for a in all_pair_ids.pair_id: #process by site, 
+		weather_site_name = NCDC.GetWSiteName(D, a, RoadwayCoordsDic) #which weather site is relevant?
+		##Check if we've gone through the normalization steps...
+		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):
+			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
+			sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #remove "/N" examples
+			sub_bt = data.FloatConvert(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #convert strings to float where possible
+			sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
 			DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['update_path'], five_minute_fractions, D['window']))
-			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['update_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a))
+			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a))
 			##########weather_site_name = GetWeatherSite(lat, lon) #to determine where to fetch weather conditions							
-			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), 
-										D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
+		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv")):
+			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
 			#Write full DiurnalDictionary to a .txt file as a .json
 		with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'w') as outfile:
 			json.dump(DiurnalDic, outfile)

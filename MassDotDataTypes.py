@@ -96,18 +96,19 @@ def GetBlueToad(D, file_name):
 		all_pair_ids.to_csv(os.path.join(D['data_path'], "all_pair_ids.csv"), index = False)
 	#Now, convert our dates to the relevant format
 	for a in all_pair_ids.pair_id:
-		sub_bt = BlueToad_df[BlueToad_df.pair_id == a]
-		cleaned_dates = []
-		print "Converting date for site %d" % a
-		for i in sub_bt.insert_time: 
-			slash_date, colon_time = i.split(" ")
-			num_date = SlashDateToNumerical(slash_date, days_in_month, leap_years) + ColonTimeToDecimal(colon_time)
-			num_date = NCDC.RoundToNearestNth(num_date, 288, 3)
-			cleaned_dates.append(num_date)
-		sub_bt.insert_time = cleaned_dates #replace with suitable numerical, ordinal dates
-		del(cleaned_dates) #to conserve memory
-		sub_bt.to_csv(os.path.join(D['update_path'], "IndividualFiles", file_name + "_" + str(a) + "_Cleaned.csv"),
-							index = False)
+		out_path = os.path.join(D['update_path'], "IndividualFiles", file_name + "_" + str(a) + "_Cleaned.csv") #where would the clean file be?
+		if not os.path.exists(out_path): #if the cleaned file doesn't exist, perform the cleaning and write it to file
+			sub_bt = BlueToad_df[BlueToad_df.pair_id == a]
+			cleaned_dates = []
+			print "Converting date for site %d" % a
+			for i in sub_bt.insert_time: 
+				slash_date, colon_time = i.split(" ")
+				num_date = SlashDateToNumerical(slash_date, days_in_month, leap_years) + ColonTimeToDecimal(colon_time)
+				num_date = NCDC.RoundToNearestNth(num_date, 288, 3)
+				cleaned_dates.append(num_date)
+			sub_bt.insert_time = cleaned_dates #replace with suitable numerical, ordinal dates
+			del(cleaned_dates) #to conserve memory
+			sub_bt.to_csv(out_path, index = False)
 	return None	
 
 def CleanBlueToad(BlueToad_df, file_path, file_name):
