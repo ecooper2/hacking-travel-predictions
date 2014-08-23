@@ -35,23 +35,9 @@ The above BlueToadAnalysis.py command runs the model from scratch, downloading s
 
 ## Reference
 
-The main module is BlueToadAnalysis.py, called primarily from the command line with two input arguments **(a)** detailing the quantity of existing data available for use and **(b)** the features to be employed for generating the relevant predictions.  The first argument can be set to one of the following:
+The main module is BlueToadAnalysis.py, called primarily from the command line with one input argument **(a)** detailing the features to be employed for generating the relevant predictions.  The argument can be set to one of the following:
 
-  * **'no update'** - All necessary pre-processing has already occurred (the appropriate dictionaries have already been
-  created, the historical data files have been cleaned, normalized, and integrated with existing weather data, etc).
-  Moreover, we are not interested in gathering more recent data to be used to augment the historical database used for    prediction generated.  This will lead to, by far, the shortest runtimes.
-
-  * **'update'** - Historical data from:
-  https://github.com/hackreduce/MassDOThack/blob/master/Road_RTTM_Volume/massdot_bluetoad_data.zip
-  has already downloaded and unzipped.  However, nothing else is assumed to have been done.  This setting will partition
-  the large (~1GB) dataset into individual files (by roadway) that are then cleaned, processed,
-  statistically-normalized, and will assimilate historical weather data.  The appropriate dictionaries will be created.
-  This is a slower option.
-
-  * **'scratch'** - Nothing has been downloaded.  This program will find, download, and unzip the relevant datafiles, then
-  perform the tasks enumerated in the 'update' description.  This is the slowest option of all.
-
-The second additional argument defines the features used (or excluded) in prediction generation.  Each letter it contains (order independent) denotes a predictive feature. They are described below:
+The argument defines the features used (or excluded) in prediction generation.  Each letter it contains (order independent) denotes a predictive feature. They are described below:
 
   * **W** - Weather.  Each historical example is classified as snow/ice, rainstorms, fog/haze, or clear.  Including this
   option ensures that examples from which predictive estimates emerge are of the same weather classification as the
@@ -64,3 +50,4 @@ The second additional argument defines the features used (or excluded) in predic
   * **S** - Sat/Sun.  In lieu of specifying day-of-week, this applies a lesser standard, only insisting on agreement in
         weekday/weekend status.  For instance, a prediction on Wednesday could consider examples on
         Mondays-through-Fridays, while a prediction on Sunday would consider only weekend days as historical examples.
+
