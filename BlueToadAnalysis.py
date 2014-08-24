@@ -193,17 +193,10 @@ def GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset):
 
 	else: #'S' in subset, grab weekday or weekends
 		if day_of_week >= 5: #it's a weekend
-<<<<<<< HEAD
 			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week >= 5, 
 									  traffic_sub_bt.time_of_day == current_time)], [5,6]
 		else: #it's a weekday	
 			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week < 5, 
-=======
-			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week >= 5,
-									  raffic_sub_bt.time_of_day == current_time)], [5,6]
-		else: #it's a weekday
-			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week < 5,
->>>>>>> 531128d68c910404bf97831e93ea4d5f128df288
 									  traffic_sub_bt.time_of_day == current_time)], [0,1,2,3,4]
 
 def GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_range, day_of_week):
