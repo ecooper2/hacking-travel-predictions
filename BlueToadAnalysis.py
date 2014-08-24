@@ -194,7 +194,7 @@ def GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset):
 	else: #'S' in subset, grab weekday or weekends
 		if day_of_week >= 5: #it's a weekend
 			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week >= 5, 
-									  raffic_sub_bt.time_of_day == current_time)], [5,6]
+									  traffic_sub_bt.time_of_day == current_time)], [5,6]
 		else: #it's a weekday	
 			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week < 5, 
 									  traffic_sub_bt.time_of_day == current_time)], [0,1,2,3,4]
@@ -449,7 +449,7 @@ if __name__ == "__main__":
 	if not os.path.exists(os.path.join(D["update_path"], "IndividualFiles")): os.makedirs(os.path.join(D["update_path"], "IndividualFiles"))
 	data.GetBlueToad(D, D['bt_name']) #read it in and re-format dates
 	all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
-	if not os.path.exists(os.path.join(D['update_path'], 'DiurnalDic.txt')): #if this dictionary doesn't exist, we'll fill it 
+	if not os.path.exists(os.path.join(D['update_path'], 'DiurnalDictionary.txt')): #if this dictionary doesn't exist, we'll fill it 
 		DiurnalDic = {} #To be appended, site by site
 	else: #just read it it from file
 		DiurnalDic = GetJSON(D['update_path'], "DiurnalDictionary.txt")
