@@ -408,6 +408,15 @@ def Unzip(fname, out_path):
 	fh.close()
 	return None
 
+def SubBt_Cleaned_to_PreNormalized(D, a):
+	"""The cleaned bt file must be transformed from its original 'cleaned' format to a form with '/N' examples removed,
+	strings converted to floats, and a day-of-week column added where needed.  Use the parameter dictionary (D) to convert roadway (a)"""
+	sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
+	sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #remove "/N" examples
+	sub_bt = data.FloatConvert(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #convert strings to float where possible
+	sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
+	return sub_bt
+	
 def HardCodedParameters():
 	"""Returns a dictionary of parameters we are unlikely to change..."""
 	D = {"bt_path" : os.path.join("scratch"),
@@ -466,16 +475,15 @@ if __name__ == "__main__":
 	else:
 		NOAADic = GetJSON(D['update_path'], D['WeatherInfo']) #read in the locations of closest weather sites
 	for a in all_pair_ids.pair_id: #process by site, 
-		weather_site_name = NCDC.GetWSiteName(D, a, RoadwayCoordsDic) #which weather site is relevant?
-		##Check if we've gone through the normalization steps...
+		flag = 0 ##Check if we've gone through the normalization steps...
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):
-			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
-			sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #remove "/N" examples
-			sub_bt = data.FloatConvert(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #convert strings to float where possible
-			sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
+			sub_bt = SubBt_Cleaned_to_PreNormalized(D, a); flag = 1 #to note that this process is already done.
+		if str(a) + "_0" not in DiurnalDic.keys(): #if the DiurnalDictionary is still empty
+			if not flag: #if we need to process of the sub_bt data frame again. 
+				sub_bt = SubBt_Cleaned_to_PreNormalized(D, a); flag = 1 #to note that this process is already done.
 			DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['update_path'], five_minute_fractions, D['window']))
+		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):			
 			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a))
-			##########weather_site_name = GetWeatherSite(lat, lon) #to determine where to fetch weather conditions							
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv")):
 			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
 			#Write full DiurnalDictionary to a .txt file as a .json
