@@ -474,20 +474,21 @@ if __name__ == "__main__":
 	else:
 		NOAADic = GetJSON(D['update_path'], D['WeatherInfo']) #read in the locations of closest weather sites
 	for a in all_pair_ids.pair_id: #process by site, 
-		flag = 0 ##Check if we've gone through the normalization steps...
+		flag = 0; DD_flag = False ##Check if we've gone through the normalization steps...
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):
 			sub_bt = SubBt_Cleaned_to_PreNormalized(D, a); flag = 1 #to note that this process is already done.
 		if str(a) + "_0" not in DiurnalDic.keys(): #if the DiurnalDictionary is still empty
 			if not flag: #if we need to process of the sub_bt data frame again. 
 				sub_bt = SubBt_Cleaned_to_PreNormalized(D, a); flag = 1 #to note that this process is already done.
-			DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['update_path'], five_minute_fractions, D['window']))
+			DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['update_path'], five_minute_fractions, D['window'])); DD_flag = True
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):			
 			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a))
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv")):
 			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
 			#Write full DiurnalDictionary to a .txt file as a .json
-		with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'w') as outfile:
-			json.dump(DiurnalDic, outfile)
+		if DD_flag:
+			with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'w') as outfile:
+				json.dump(DiurnalDic, outfile)
 	day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
 	pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
