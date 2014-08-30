@@ -256,8 +256,8 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 		if str(a) in ps_and_cs.keys(): #if we have access to current conditions at this locations
 			sub_bt = pd.read_csv(os.path.join(bt_path, "IndividualFiles", bt_name + "_" + str(a) +
 								"_" + "Cleaned_Normalized_Weather.csv"))
-			sub_bt.index = range(len(sub_bt)) #re-index, starting from zero
-			L = len(sub_bt) #how many examples, and more importantly, when does this end...
+			L = len(sub_bt) #how many examples, and more importantly, when does this end...								
+			sub_bt.index = range(L) #re-index, starting from zero
 			if 'W' in subset:
 				weather_sub_bt = sub_bt[sub_bt.weather == ps_and_cs[str(a)][1]] #just similar weather
 			else:
@@ -267,8 +267,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 				traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range, L_w)
 			else:
 				traffic_sub_bt = weather_sub_bt
-			traffic_sub_bt['time_of_day'] = [round(traffic_sub_bt.insert_time[i] - int(traffic_sub_bt.insert_time[i]),3)
-											for i in traffic_sub_bt.index]
+			traffic_sub_bt['time_of_day'] = [round(math.modf(traffic_sub_bt.insert_time[i])[0],3) for i in traffic_sub_bt.index]
 			#locate similar days/times, more lax search in less common weather
 			if 'D' in subset or 'S' in subset: #if we need to choose only certain days of the week
 				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
@@ -283,9 +282,9 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 				PredictionDic[str(a)][str(p)] = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
 							  #######Generate Predictions#####
 			print "Generating Predictions for site %d" % a
-			for ind,f in enumerate(five_minute_fractions): #for generating of predictions at each forward step
+			for ind in xrange(len(five_minute_fractions)): #for generating of predictions at each forward step
 				viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if i + ind + 1 < L]
-				prediction_sub = sub_bt[sub_bt.index.isin(viable_future_indices)]
+				prediction_sub = sub_bt.iloc[viable_future_indices]
 				for p in pcts: #iterate over the percentiles required for estimation
 					if p == 'min': #if we're estimating a best case
 						PredictionDic[str(a)][str(p)].append(np.min(prediction_sub.Normalized_t))
@@ -430,7 +429,7 @@ def HardCodedParameters():
 	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
 	"time_range" : 10, #how far from the current time is considered 'similar'?
 	"weather_fac_dic" : {' ': 1, 'RA' : 3, 'FG' : 5, 'SN' : 10}, #how many more must we grab, by cond?
-	"pct_tile_list" : ['min', 10, 20, 25, 30, 50, 70, 75, 90, 'max'], #which percentiles shall be made available,
+	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
 										#along with the best and worst-case scenarios
 	"path_to_lat_lons" : "https://github.com/apcollier/hacking-travel/blob/master/js/segments.js",
 	"path_to_current" : "http://traffichackers.com/current.json",
