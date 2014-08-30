@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import NCDC_WeatherProcessor as NCDC
 import ParseRealTimeMassDot as mass
+import math
 
 def GetRoadVolume_Historical(file_path, Cleaned, file_name):
 	"""(Cleaned) is a boolean variable describing whether a pre-developed data frame has already
@@ -85,12 +86,14 @@ def GetBlueToad(D, file_name):
 				
 	days_in_month = np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]) #to covert into day_of_year		
 	leap_years = [1900 + 4*x for x in range(50)] #runs until 2096 for potential leap_years
+	bt_read = False #we have NOT yet read the large BlueToad_df into memory
 
-	BlueToad_df = pd.read_csv(os.path.join(D['bt_path'], file_name + ".csv"))
 	#if we haven't found generated unique ids to be used to break the massive data file into its constituents
 	if os.path.exists(os.path.join(D['data_path'], "all_pair_ids.csv")): 	
 		all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
 	else:
+		if not bt_read: 
+			BlueToad_df = pd.read_csv(os.path.join(D['bt_path'], file_name + ".csv")); bt_read = True
 		all_pair_ids = mass.unique(BlueToad_df.pair_id)
 		all_pair_ids = pd.DataFrame({"pair_id" : all_pair_ids})
 		all_pair_ids.to_csv(os.path.join(D['data_path'], "all_pair_ids.csv"), index = False)
@@ -98,6 +101,8 @@ def GetBlueToad(D, file_name):
 	for a in all_pair_ids.pair_id:
 		out_path = os.path.join(D['update_path'], "IndividualFiles", file_name + "_" + str(a) + "_Cleaned.csv") #where would the clean file be?
 		if not os.path.exists(out_path): #if the cleaned file doesn't exist, perform the cleaning and write it to file
+			if not bt_read: 
+				BlueToad_df = pd.read_csv(os.path.join(D['bt_path'], file_name + ".csv")); bt_read = True
 			sub_bt = BlueToad_df[BlueToad_df.pair_id == a]
 			cleaned_dates = []
 			print "Converting date for site %d" % a
@@ -127,6 +132,8 @@ def FloatConvert(BlueToad_df, file_path, file_name):
 	"""Convert the travel_time column from strings to floats."""
 	print "Reformatting Travel Times As Floats...for site %d" % int(BlueToad_df.pair_id[0:1])
 	BlueToad_df.travel_time = BlueToad_df.travel_time.astype('float64')
+	print "Rounding time of days..."
+	BlueToad_df['time_of_day'] = [round(math.modf(BlueToad_df.insert_time[i])[0],3) for i in BlueToad_df.index]
 	print "Writing to File"
 	BlueToad_df.to_csv(os.path.join(file_path, file_name + "_Cleaned.csv"),
 						index = False)
