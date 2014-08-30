@@ -267,7 +267,6 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 				traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range, L_w)
 			else:
 				traffic_sub_bt = weather_sub_bt
-			traffic_sub_bt['time_of_day'] = [round(math.modf(traffic_sub_bt.insert_time[i])[0],3) for i in traffic_sub_bt.index]
 			#locate similar days/times, more lax search in less common weather
 			if 'D' in subset or 'S' in subset: #if we need to choose only certain days of the week
 				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
@@ -484,7 +483,8 @@ if __name__ == "__main__":
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):			
 			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a))
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv")):
-			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D['weather_dir'], weather_site_name)
+			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
+			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D['weather_dir'], D["weather_site_default"])
 			#Write full DiurnalDictionary to a .txt file as a .json
 		if DD_flag:
 			with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'w') as outfile:
