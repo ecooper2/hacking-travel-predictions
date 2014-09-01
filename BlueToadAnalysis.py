@@ -282,7 +282,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 							  #######Generate Predictions#####
 			print "Generating Predictions for site %d" % a
 			for ind in xrange(len(five_minute_fractions)): #for generating of predictions at each forward step
-				viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if i + ind + 1 < L]
+				viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if day_sub_bt.index[i] + ind + 1 < L]
 				prediction_sub = sub_bt.iloc[viable_future_indices]
 				for p in pcts: #iterate over the percentiles required for estimation
 					if p == 'min': #if we're estimating a best case
