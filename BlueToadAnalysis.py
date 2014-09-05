@@ -193,10 +193,10 @@ def GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset):
 
 	else: #'S' in subset, grab weekday or weekends
 		if day_of_week >= 5: #it's a weekend
-			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week >= 5, 
+			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week >= 5,
 									  traffic_sub_bt.time_of_day == current_time)], [5,6]
-		else: #it's a weekday	
-			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week < 5, 
+		else: #it's a weekday
+			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week < 5,
 									  traffic_sub_bt.time_of_day == current_time)], [0,1,2,3,4]
 
 def GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_range, day_of_week):
@@ -256,7 +256,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 		if str(a) in ps_and_cs.keys(): #if we have access to current conditions at this locations
 			sub_bt = pd.read_csv(os.path.join(bt_path, "IndividualFiles", bt_name + "_" + str(a) +
 								"_" + "Cleaned_Normalized_Weather.csv"))
-			L = len(sub_bt) #how many examples, and more importantly, when does this end...								
+			L = len(sub_bt) #how many examples, and more importantly, when does this end...
 			sub_bt.index = range(L) #re-index, starting from zero
 			if 'W' in subset:
 				weather_sub_bt = sub_bt[sub_bt.weather == ps_and_cs[str(a)][1]] #just similar weather
@@ -414,7 +414,7 @@ def SubBt_Cleaned_to_PreNormalized(D, a):
 	sub_bt = data.FloatConvert(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #convert strings to float where possible
 	sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
 	return sub_bt
-	
+
 def HardCodedParameters():
 	"""Returns a dictionary of parameters we are unlikely to change..."""
 	D = {"bt_path" : os.path.join("scratch"),
@@ -431,7 +431,7 @@ def HardCodedParameters():
 	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
 										#along with the best and worst-case scenarios
 	"path_to_lat_lons" : "https://github.com/apcollier/hacking-travel/blob/master/js/segments.js",
-	"path_to_current" : "http://traffichackers.com/current.json",
+	"path_to_current" : "http://traffichackers.com/data/current.json",
 	"CoordsDic_name" : "RoadwayCoordsDic.txt", "NOAA_df_name" : "WeatherSites_MA.csv",
 	"WeatherInfo" : "ClosestWeatherSite.txt",
 	"WeatherURL" : "http://w1.weather.gov/xml/current_obs/",
@@ -456,7 +456,7 @@ if __name__ == "__main__":
 	if not os.path.exists(os.path.join(D["update_path"], "IndividualFiles")): os.makedirs(os.path.join(D["update_path"], "IndividualFiles"))
 	data.GetBlueToad(D, D['bt_name']) #read it in and re-format dates
 	all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
-	if not os.path.exists(os.path.join(D['update_path'], 'DiurnalDictionary.txt')): #if this dictionary doesn't exist, we'll fill it 
+	if not os.path.exists(os.path.join(D['update_path'], 'DiurnalDictionary.txt')): #if this dictionary doesn't exist, we'll fill it
 		DiurnalDic = {} #To be appended, site by site
 	else: #just read it it from file
 		DiurnalDic = GetJSON(D['update_path'], "DiurnalDictionary.txt")
@@ -472,15 +472,15 @@ if __name__ == "__main__":
 		NOAADic = NCDC.BuildClosestNOAADic(NOAA_df, all_pair_ids.pair_id, D) #which weather site for which roadway?
 	else:
 		NOAADic = GetJSON(D['update_path'], D['WeatherInfo']) #read in the locations of closest weather sites
-	for a in all_pair_ids.pair_id: #process by site, 
+	for a in all_pair_ids.pair_id: #process by site,
 		flag = 0; DD_flag = False ##Check if we've gone through the normalization steps...
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):
 			sub_bt = SubBt_Cleaned_to_PreNormalized(D, a); flag = 1 #to note that this process is already done.
 		if str(a) + "_0" not in DiurnalDic.keys(): #if the DiurnalDictionary is still empty
-			if not flag: #if we need to process of the sub_bt data frame again. 
+			if not flag: #if we need to process of the sub_bt data frame again.
 				sub_bt = SubBt_Cleaned_to_PreNormalized(D, a); flag = 1 #to note that this process is already done.
 			DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['update_path'], five_minute_fractions, D['window'])); DD_flag = True
-		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):			
+		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):
 			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a))
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv")):
 			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
