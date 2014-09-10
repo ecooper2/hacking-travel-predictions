@@ -311,7 +311,7 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, c
 		std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic)
 		for p in PredictionDic[str(road)].keys():
 			norm_seq = PredictionDic[str(road)][str(p)]
-			UnNormDic[str(road)][str(p)] = [round(max(s + n , min_time),0) for s,n in zip(std_seq, norm_seq)]
+			UnNormDic[str(road)][str(p)] = [int(max(s + n , min_time)) for s,n in zip(std_seq, norm_seq)]
 	return UnNormDic
 
 def GetTimeVec(current_datetime, ntimes):
