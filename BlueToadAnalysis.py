@@ -311,7 +311,7 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, c
 		std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic)
 		for p in PredictionDic[str(road)].keys():
 			norm_seq = PredictionDic[str(road)][str(p)]
-			UnNormDic[str(road)][str(p)] = [int(max(s + n , min_time)) for s,n in zip(std_seq, norm_seq)]
+			UnNormDic[str(road)][str(p)] = [int(max(s + n, min_time)) for s,n in zip(std_seq, norm_seq)]
 	return UnNormDic
 
 def GetTimeVec(current_datetime, ntimes):
@@ -431,7 +431,7 @@ def HardCodedParameters():
 	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
 										#along with the best and worst-case scenarios
 	"path_to_lat_lons" : "https://github.com/apcollier/hacking-travel/blob/master/js/segments.js",
-	"path_to_current" : "http://traffichackers.com/data/current.json",
+	"path_to_current" : "http://traffichackers.com/data/current.json", #traffichackers.com/data/predictions/similar_dow.json
 	"CoordsDic_name" : "RoadwayCoordsDic.txt", "NOAA_df_name" : "WeatherSites_MA.csv",
 	"WeatherInfo" : "ClosestWeatherSite.txt",
 	"WeatherURL" : "http://w1.weather.gov/xml/current_obs/",
@@ -460,10 +460,6 @@ if __name__ == "__main__":
 		DiurnalDic = {} #To be appended, site by site
 	else: #just read it it from file
 		DiurnalDic = GetJSON(D['update_path'], "DiurnalDictionary.txt")
-	if not os.path.exists(os.path.join(D['update_path'], 'MinimumPredictions.txt')): #if we lack minimums for each site
-		MinimumDic = DefineMinimums(D, all_pair_ids)
-	else:
-		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
 	if os.path.exists(os.path.join(D['update_path'], D['CoordsDic_name'])):	#if we've already built it
 		RoadwayCoordsDic = GetJSON(D['update_path'], D['CoordsDic_name'])
 	else:
@@ -489,6 +485,10 @@ if __name__ == "__main__":
 		if DD_flag:
 			with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'w') as outfile:
 				json.dump(DiurnalDic, outfile)
+	if not os.path.exists(os.path.join(D['update_path'], 'MinimumPredictions.txt')): #if we lack minimums for each site
+		MinimumDic = DefineMinimums(D, all_pair_ids)
+	else:
+		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
 	day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
 	pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
