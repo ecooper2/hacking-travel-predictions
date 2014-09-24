@@ -1,1 +1,2 @@
-pip install -r 
+pandas>=0.14.1
+BeautifulSoup>=3.2.1
