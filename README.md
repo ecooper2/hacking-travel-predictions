@@ -28,26 +28,27 @@ Make sure you have [Python (2.7.x)](https://www.python.org/downloads/) and [pip]
 2.  Run the predictive model from scratch
 
   ```
-  $ python BlueToadAnalysis.py 'scratch' TDW
+  $ python BlueToadAnalysis.py today scratch.txt -w -t
   ```
 
 The above BlueToadAnalysis.py command runs the model from scratch, downloading supporting data as necessary, and generated predictions based on current traffic, the current day of the week, and the current weather.
 
 ## Reference
 
-The main module is BlueToadAnalysis.py, called primarily from the command line with one input argument **(a)** detailing the features to be employed for generating the relevant predictions.  The argument can be set to one of the following:
+The main module is BlueToadAnalysis.py, called primarily from the command line with two required arguments and two optional arguments:
 
-The argument defines the features used (or excluded) in prediction generation.  Each letter it contains (order independent) denotes a predictive feature. They are described below:
+The first defines the day (or days) considered in prediction generation.  Each option is described below:
 
-  * **W** - Weather.  Each historical example is classified as snow/ice, rainstorms, fog/haze, or clear.  Including this
+  * **today** - Run the model, estimating conditions for the current day of the week (i.e Thursday).
+  * **weekday** - Consider all weekdays (Monday thru Friday)
+  * **weekend** - Consider all weekend days (Saturday and Sunday)
+  * **(monday, tuesday, ..., sunday)** - Run the model using desired conditions using only historical examples from the listed day.
+  
+The second names the output file into which a JSON will be written (in the /update directory), containing the output predictions.
+
+The third and fourth options (-w or -weather) and (-t or -traffic) are optional arguments instructing the model to include:
+  - Weather.  Each historical example is classified as snow/ice, rainstorms, fog/haze, or clear.  Including this
   option ensures that examples from which predictive estimates emerge are of the same weather classification as the
   current conditions, via NOAA's nearest gauge: http://w1.weather.gov/xml/current_obs/seek.php?state=ma&Find=Find
 
-  * **T** - Traffic.  Consider only historical examples with similarly free-flowing/congested traffic conditions.
-
-  * **D** - Day-of-week.  Consider only historical from the same day-of-the-week as the current conditions.
-
-  * **S** - Sat/Sun.  In lieu of specifying day-of-week, this applies a lesser standard, only insisting on agreement in
-        weekday/weekend status.  For instance, a prediction on Wednesday could consider examples on
-        Mondays-through-Fridays, while a prediction on Sunday would consider only weekend days as historical examples.
-
+  - Traffic.  Consider only historical examples with similarly free-flowing/congested traffic conditions.

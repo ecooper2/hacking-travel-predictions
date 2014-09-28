@@ -11,6 +11,7 @@ import NCDC_WeatherProcessor as NCDC
 import math
 import zipfile as Z
 import sys
+import argparse
 from urllib2 import urlopen, URLError, HTTPError
 
 global five_minute_fractions
@@ -183,30 +184,31 @@ def GetSub_Traffic(mini_bt, current_traffic_normalized, pct_range, L):
 	start_ind, end_ind = int(percentile_range[0] * L), int(percentile_range[1] * L - 1)
 	return mini_bt[start_ind:end_ind]
 
-def GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset):
+def GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset, analysis_day):
 	"""Given the similar traffic examples in (traffic_sub_bt), the (day_of_week), the (current_time), and
 	descriptions in (subset) of whether we are interested in the same day or simply weekday/weekend matches,
 	return the list of daytimes that are appropriate."""
-	if 'D' in subset: #if we're working our way down to a specific day-of-the-week
-		return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week == day_of_week,
-									  traffic_sub_bt.time_of_day == current_time)], [day_of_week]
+	if analysis_day >= 0: #if we're working our way down to a specific day-of-the-week
+		return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week == analysis_day,
+									  traffic_sub_bt.time_of_day == current_time)], [analysis_day]
 
 	else: #'S' in subset, grab weekday or weekends
-		if day_of_week >= 5: #it's a weekend
+		if 'S' in subset: #it's a weekend
 			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week >= 5,
 									  traffic_sub_bt.time_of_day == current_time)], [5,6]
 		else: #it's a weekday
 			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week < 5,
 									  traffic_sub_bt.time_of_day == current_time)], [0,1,2,3,4]
 
-def GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_range, day_of_week):
+def GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_range, day_of_week, analysis_day = -1):
 	"""Return a dataframe which only contains entries with the same time as the present
 	or times within (time_range) of the current time on the appropriate days of the week.
 	For instance, 11:00pm times could include 12:30am as 'similar' examples.  These would be on the
-	following day.  If 'S' in (subset), we will return days 0-4, weekdays, or 5-6, weekends."""
+	following day.  If 'S' in (subset), we will return days 0-4, weekdays, or 5-6, weekends.
+	If (analysis_day) assumes a non-negative value, use this day's data only"""
 	current_time = NCDC.GetTimeFromDateTime(current_datetime) #0-1, three decimal time of day (.875, e.g.)
 	current_day = current_datetime.day #day of the month (allows distinguishing similar times on other days)
-	correct_daytimes, viable_days = GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset)
+	correct_daytimes, viable_days = GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset, analysis_day)
 
 	time_shifts = GetAcceptableTimeRanges(time_range)
 	if len(time_shifts) > 0: #if time_range allows for other times to be considered
@@ -268,9 +270,17 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			else:
 				traffic_sub_bt = weather_sub_bt
 			#locate similar days/times, more lax search in less common weather
-			if 'D' in subset or 'S' in subset: #if we need to choose only certain days of the week
+			if 'Y' in subset or 'S' in subset: #if we need to choose only certain days of the week
 				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
 								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
+				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
+					time_range = time_range * 1.5
+					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
+							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
+			elif ('0' in subset or '1' in subset or '2' in subset or '3' in subset 
+				  or '4' in subset or '5' in subset or '6' in subset): #it's a specific day-of-week
+				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
+								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))				  
 				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
 					time_range = time_range * 1.5
 					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
@@ -424,6 +434,8 @@ def HardCodedParameters():
 	"weather_site_name" : "closest", "weather_site_default" : "BostonAirport",
 	'w_def': 'Boston, Logan International Airport ',
 	"window" : 12, #how many five-minute interval defines a suitable moving-average window
+	"day_dict" : {'monday' : 0, 'tuesday' : 1, 'wednesday' : 2, 'thursday' : 3, 'friday' : 4, 
+				  'saturday' : 5, 'sunday' : 6},
 	#bt_proc can be "no_update" if we are not processing/normalizing...otherwise the whole process ensues
 	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
 	"time_range" : 10, #how far from the current time is considered 'similar'?
@@ -440,12 +452,8 @@ def HardCodedParameters():
 	D["weather_dir"] = os.path.join(D['data_path'], "NCDC_Weather")
 	return D
 
-if __name__ == "__main__":
-	script_name, subset, output_file_name = sys.argv #for the subset variable the following options are available:
-	#'W' - weather, 'T' - traffic conditions, 'D' - day of week, 'S' - Sat/Sun vs. Mon-Fri.  The options
-	#are invoked by including the letters in the input string, subset.  For example.  Using 'TD' as the
-	#string will choose examples based on traffic and the day of week, but not weather...
-	D = HardCodedParameters()
+def main(D, output_file_name, subset):
+	"""Main module"""
 	NOAA_df = pd.read_csv(os.path.join(D['data_path'], D['NOAA_df_name']))
 	if not os.path.exists(os.path.join(D["update_path"])): os.makedirs(os.path.join(D["update_path"])) #add directories if missing
 	if not os.path.exists(os.path.join(D["bt_path"])): os.makedirs(os.path.join(D["bt_path"]))
@@ -491,9 +499,41 @@ if __name__ == "__main__":
 		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
 	day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
 	pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)
+	if 'O' in subset: subset += str(day_of_week) #this means we are running the model based on whatever 'today' is.
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
 									D['update_path'], D['bt_name'], D['pct_tile_list'], subset)
 	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime)
 	with open(os.path.join(D['update_path'], output_file_name), 'w') as outfile:
 		json.dump(CurrentPredDic, outfile)
+	
+if __name__ == "__main__":
+	#'W' - weather, 'T' - traffic conditions, 'D' - day of week, 'S' - Sat/Sun vs. Mon-Fri.  The options
+	#are invoked by including the letters in the input string, subset.  For example.  Using 'TD' as the
+	#string will choose examples based on traffic and the day of week, but not weather...
+	D = HardCodedParameters()
+	parser = argparse.ArgumentParser()
+	parser.add_argument("day", choices=['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+						'today', 'weekday', 'weekend'], help = "day of week option, must be a lowercase day of the week, 'today', 'weekday', or 'weekend'")						
+	parser.add_argument("output_file_name", help = "the name of the file ('.txt' included) to which predictions are written.")
+	parser.add_argument("-t", "--traffic", help = "traffic, can be included as '-t' or '-traffic'", action = "count")
+	parser.add_argument("-w", "--weather", help = "weather, can be included as '-w' or '--weather'", action = "count")
+	args = parser.parse_args()
+
+	subset = '' #to be added based on user provided arguments:
+	if args.weather >= 1: subset += 'W'  
+	if args.traffic >= 1: subset += 'T'
+	if args.day == 'weekend': 
+		subset += 'S'; print "WEEKEND ANALYSIS"
+	elif args.day == 'weekday': 
+		subset += 'Y'; print "WEEKDAY ANALYSIS"
+	elif args.day == 'today':
+		subset += 'O'; print "ANAYLSIS FOR TODAY"
+	else:
+		subset += str(D['day_dict'][args.day]); 
+	out_name = args.output_file_name
+	
+	#print out_name, subset
+	main(D, out_name, subset)
+	
+	
