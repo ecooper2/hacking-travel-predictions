@@ -35,7 +35,7 @@ The above BlueToadAnalysis.py command runs the model from scratch, downloading s
 
 ## Reference
 
-The main module is BlueToadAnalysis.py, called primarily from the command line with two required arguments and two optional arguments:
+The main module is BlueToadAnalysis.py, called primarily from the command line with two required arguments and three optional arguments:
 
 The first defines the day (or days) considered in prediction generation.  Each option is described below:
 
@@ -46,9 +46,12 @@ The first defines the day (or days) considered in prediction generation.  Each o
   
 The second names the output file into which a JSON will be written (in the /update directory), containing the output predictions.
 
-The third and fourth options (-w or -weather) and (-t or -traffic) are optional arguments instructing the model to include:
+The three options (-w or -weather), (-t or -traffic), and (-l or -length) are optional arguments instructing the model to include:
   - Weather.  Each historical example is classified as snow/ice, rainstorms, fog/haze, or clear.  Including this
   option ensures that examples from which predictive estimates emerge are of the same weather classification as the
   current conditions, via NOAA's nearest gauge: http://w1.weather.gov/xml/current_obs/seek.php?state=ma&Find=Find
 
   - Traffic.  Consider only historical examples with similarly free-flowing/congested traffic conditions.
+  
+  - Length of forecast.  If left blank, 288 five-minute predictions are generated (one day).  Otherwise, the number of 5-minute increments can
+    be chosen.

@@ -248,7 +248,7 @@ def AdjustDayOfWeek(current_day, new_day, day_of_week):
 		return (day_of_week + 1) % 7
 
 def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_of_week,
-								  current_datetime, pct_range, time_range, bt_path, bt_name, pcts, subset):
+								  current_datetime, pct_range, time_range, bt_path, bt_name, pcts, subset, pred_len):
 	"""Iterate over all pair_ids and determine similar matches in terms of time_of_day,
 	weather, traffic, and day_of_week...and generate 288 five-minute predictions (a
 	24-hour prediction in 5-minute intervals)"""
@@ -284,14 +284,14 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
 					time_range = time_range * 1.5
 					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
-							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
+							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))
 			else:
 				day_sub_bt = traffic_sub_bt
 			for p in pcts:
 				PredictionDic[str(a)][str(p)] = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
 							  #######Generate Predictions#####
 			print "Generating Predictions for site %d" % a
-			for ind in xrange(len(five_minute_fractions)): #for generating of predictions at each forward step
+			for ind in xrange(pred_len): #for generating of predictions at each forward step
 				viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if day_sub_bt.index[i] + ind + 1 < L]
 				prediction_sub = sub_bt.iloc[viable_future_indices]
 				for p in pcts: #iterate over the percentiles required for estimation
@@ -303,7 +303,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 						PredictionDic[str(a)][str(p)].append(np.percentile(prediction_sub.Normalized_t, p))
 		else: #use default...essentially dead-average conditions, flagged as -0.00001 rather than zero
 			print "No current information available for site %d, using default." % a
-			pred_list = [-0.00001 for i in range(288)]
+			pred_list = [-0.00001 for i in range(D['pred_duration'])]
 			for p in pcts: #NOTE, WITHOUT CURRENT INFO, ALL PERCENTILES WILL BE THE SAME (DEFAULT)
 				PredictionDic[str(a)][str(p)] = pred_list
 	#with open(os.path.join(bt_path, 'CurrentPredictions.txt'), 'w') as outfile:
@@ -323,19 +323,6 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, c
 			norm_seq = PredictionDic[str(road)][str(p)]
 			UnNormDic[str(road)][str(p)] = [int(max(s + n, min_time)) for s,n in zip(std_seq, norm_seq)]
 	return UnNormDic
-
-def GetTimeVec(current_datetime, ntimes):
-	""" Given a (current_datetime) of datetime format, fill a vector with 288 times of the form:
-	"21:05,16".  In this case, "16" will represent the day of the month, which will shift
-	when the prediction crosses over into the following day.  At the end of the month, strings will
-	change from '23:55,31' to '00:00,1', e.g."""
-	five_min_steps = [5 + 5*i for i in range(ntimes)] #5, 10, 15, ..., 8640
-	time_vec = []
-	for f in five_min_steps:
-		new_date = current_datetime + datetime.timedelta(minutes = f)
-		time_vec.append(NDigitString(2,new_date.hour) + ":" + NDigitString(2,new_date.minute) + "," +
-						str(new_date.day))
-	return time_vec
 
 def NDigitString(n, num):
 	"""Given a prescribed length of a digit string (n), turn a number (num) into the appropriate length
@@ -431,6 +418,7 @@ def HardCodedParameters():
 	"update_path" : os.path.join("update"),
 	"data_path" : os.path.join("data"),
 	"bt_name" : "massdot_bluetoad_data",
+	"pred_duration" : 288, #hours of prediction
 	"weather_site_name" : "closest", "weather_site_default" : "BostonAirport",
 	'w_def': 'Boston, Logan International Airport ',
 	"window" : 12, #how many five-minute interval defines a suitable moving-average window
@@ -502,10 +490,11 @@ def main(D, output_file_name, subset):
 	if 'O' in subset: subset += str(day_of_week) #this means we are running the model based on whatever 'today' is.
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
-									D['update_path'], D['bt_name'], D['pct_tile_list'], subset)
+									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, D['pred_duration'])
 	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime)
 	with open(os.path.join(D['update_path'], output_file_name), 'w') as outfile:
 		json.dump(CurrentPredDic, outfile)
+	return None
 	
 if __name__ == "__main__":
 	#'W' - weather, 'T' - traffic conditions, 'D' - day of week, 'S' - Sat/Sun vs. Mon-Fri.  The options
@@ -518,11 +507,15 @@ if __name__ == "__main__":
 	parser.add_argument("output_file_name", help = "the name of the file ('.txt' included) to which predictions are written.")
 	parser.add_argument("-t", "--traffic", help = "traffic, can be included as '-t' or '-traffic'", action = "count")
 	parser.add_argument("-w", "--weather", help = "weather, can be included as '-w' or '--weather'", action = "count")
+	parser.add_argument("-l", "--length", help = "user-specified duration, in five-minute increments, default of 288 (one day)", 
+						type = int, default = 288) 
 	args = parser.parse_args()
 
 	subset = '' #to be added based on user provided arguments:
 	if args.weather >= 1: subset += 'W'  
 	if args.traffic >= 1: subset += 'T'
+	D['pred_duration'] = args.length #define the length of prediction
+	
 	if args.day == 'weekend': 
 		subset += 'S'; print "WEEKEND ANALYSIS"
 	elif args.day == 'weekday': 
@@ -533,7 +526,7 @@ if __name__ == "__main__":
 		subset += str(D['day_dict'][args.day]); 
 	out_name = args.output_file_name
 	
-	#print out_name, subset
+	print out_name, subset, D['pred_duration']
 	main(D, out_name, subset)
 	
 	
