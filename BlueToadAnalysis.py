@@ -200,13 +200,16 @@ def GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset, analys
 			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week < 5,
 									  traffic_sub_bt.time_of_day == current_time)], [0,1,2,3,4]
 
-def GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_range, day_of_week, analysis_day = -1):
+def GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day, time_range, day_of_week, analysis_day = -1):
 	"""Return a dataframe which only contains entries with the same time as the present
 	or times within (time_range) of the current time on the appropriate days of the week.
 	For instance, 11:00pm times could include 12:30am as 'similar' examples.  These would be on the
 	following day.  If 'S' in (subset), we will return days 0-4, weekdays, or 5-6, weekends.
 	If (analysis_day) assumes a non-negative value, use this day's data only"""
-	current_time = NCDC.GetTimeFromDateTime(current_datetime) #0-1, three decimal time of day (.875, e.g.)
+	if time_of_day == "": #if the users have not insisted on a time of day
+		current_time = NCDC.GetTimeFromDateTime(current_datetime) #0-1, three decimal time of day (.875, e.g.)
+	else:
+		current_time, time_range = time_of_day, 0
 	current_day = current_datetime.day #day of the month (allows distinguishing similar times on other days)
 	correct_daytimes, viable_days = GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset, analysis_day)
 
@@ -247,8 +250,8 @@ def AdjustDayOfWeek(current_day, new_day, day_of_week):
 	elif new_day - current_day < 1: # moving from the 30th/31st of a month to the 1st of the succeeding month
 		return (day_of_week + 1) % 7
 
-def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_of_week,
-								  current_datetime, pct_range, time_range, bt_path, bt_name, pcts, subset, pred_len):
+def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_of_week, current_datetime, pct_range, 
+								  time_range, bt_path, bt_name, pcts, subset, pred_len, time_of_day):
 	"""Iterate over all pair_ids and determine similar matches in terms of time_of_day,
 	weather, traffic, and day_of_week...and generate 288 five-minute predictions (a
 	24-hour prediction in 5-minute intervals)"""
@@ -271,19 +274,19 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 				traffic_sub_bt = weather_sub_bt
 			#locate similar days/times, more lax search in less common weather
 			if 'Y' in subset or 'S' in subset: #if we need to choose only certain days of the week
-				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
+				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
 				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
 					time_range = time_range * 1.5
-					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
+					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
 			elif ('0' in subset or '1' in subset or '2' in subset or '3' in subset 
 				  or '4' in subset or '5' in subset or '6' in subset): #it's a specific day-of-week
-				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
+				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))				  
 				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
 					time_range = time_range * 1.5
-					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset,
+					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))
 			else:
 				day_sub_bt = traffic_sub_bt
@@ -440,7 +443,7 @@ def HardCodedParameters():
 	D["weather_dir"] = os.path.join(D['data_path'], "NCDC_Weather")
 	return D
 
-def main(D, output_file_name, subset):
+def main(D, output_file_name, subset, time_of_day):
 	"""Main module"""
 	NOAA_df = pd.read_csv(os.path.join(D['data_path'], D['NOAA_df_name']))
 	if not os.path.exists(os.path.join(D["update_path"])): os.makedirs(os.path.join(D["update_path"])) #add directories if missing
@@ -486,11 +489,15 @@ def main(D, output_file_name, subset):
 	else:
 		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
 	day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
-	pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)
+	if time_of_day == "": #if we are interested in predictions based on current conditions
+		pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)
+	else: #zero-out the normalized conditions, historical analysis starts from a normalized baseline of zero (typical conditions)
+		for k in pairs_and_conditions.keys():
+			pairs_and_conditions[k][0] = 0
 	if 'O' in subset: subset += str(day_of_week) #this means we are running the model based on whatever 'today' is.
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
-									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, D['pred_duration'])
+									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, D['pred_duration'], time_of_day)
 	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime)
 	with open(os.path.join(D['update_path'], output_file_name), 'w') as outfile:
 		json.dump(CurrentPredDic, outfile)
@@ -509,13 +516,15 @@ if __name__ == "__main__":
 	parser.add_argument("-w", "--weather", help = "weather, can be included as '-w' or '--weather'", action = "count")
 	parser.add_argument("-l", "--length", help = "user-specified duration, in five-minute increments, default of 288 (one day)", 
 						type = int, default = 288) 
+	parser.add_argument("-hr", "--hour", help = "choose an hour of the day, of the form 00:00 - 23:59.  It will round to the nearest 5min.  It negates the usage of weather or traffic.", type = str, default = '')
 	args = parser.parse_args()
 
 	subset = '' #to be added based on user provided arguments:
-	if args.weather >= 1: subset += 'W'  
-	if args.traffic >= 1: subset += 'T'
+	if args.weather >= 1 and args.hour == '': subset += 'W'  #only incorporate weather/traffic if this is not a historical...
+	if args.traffic >= 1 and args.hour == '': subset += 'T'  #...specific time-of-day analysis
 	D['pred_duration'] = args.length #define the length of prediction
 	
+	#define the day of week scope to be considered
 	if args.day == 'weekend': 
 		subset += 'S'; print "WEEKEND ANALYSIS"
 	elif args.day == 'weekday': 
@@ -526,7 +535,14 @@ if __name__ == "__main__":
 		subset += str(D['day_dict'][args.day]); 
 	out_name = args.output_file_name
 	
-	print out_name, subset, D['pred_duration']
-	main(D, out_name, subset)
+	if args.hour != '' and ":" in args.hour and len(args.hour) == 5: #if we are looking for a specific day/time pairing historically rather than a prediction based on current conditions
+		hour, minute = args.hour.split(":")
+		time_of_day = float(hour)/24 + float(minute)/24/60
+		if time_of_day >= 1: time_of_day = time_of_day - int(time_of_day) #in case the number input exceeds 23:59.
+		time_of_day = NCDC.RoundToNearestNth(time_of_day, 288, 3) #return a five minute fraction (0/288 to 277/288)
+	else: 
+		time_of_day = -1
+	#print out_name, subset, D['pred_duration'], time_of_day
+	main(D, out_name, subset, time_of_day)
 	
 	

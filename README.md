@@ -46,7 +46,7 @@ The first defines the day (or days) considered in prediction generation.  Each o
   
 The second names the output file into which a JSON will be written (in the /update directory), containing the output predictions.
 
-The three options (-w or -weather), (-t or -traffic), and (-l or -length) are optional arguments instructing the model to include:
+The four options (-w or -weather), (-t or -traffic), (-l or -length), and (-hr and -hour) are optional arguments instructing the model to include:
   - Weather.  Each historical example is classified as snow/ice, rainstorms, fog/haze, or clear.  Including this
   option ensures that examples from which predictive estimates emerge are of the same weather classification as the
   current conditions, via NOAA's nearest gauge: http://w1.weather.gov/xml/current_obs/seek.php?state=ma&Find=Find
@@ -55,3 +55,7 @@ The three options (-w or -weather), (-t or -traffic), and (-l or -length) are op
   
   - Length of forecast.  If left blank, 288 five-minute predictions are generated (one day).  Otherwise, the number of 5-minute increments can
     be chosen.
+	
+  - Hour in HH:MM format, which will be rounded to the nearest five-minute time-stamp.  If this option is entered, weather will be ignored
+    (regardless of the value chosen above), traffic will be ignored (regardless of the value chosen), and the model will simply generated
+	estimates based on the chosen day(s) of the week and the chosen time of the day.
