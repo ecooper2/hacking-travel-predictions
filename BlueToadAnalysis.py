@@ -541,7 +541,7 @@ if __name__ == "__main__":
 		if time_of_day >= 1: time_of_day = time_of_day - int(time_of_day) #in case the number input exceeds 23:59.
 		time_of_day = NCDC.RoundToNearestNth(time_of_day, 288, 3) #return a five minute fraction (0/288 to 277/288)
 	else: 
-		time_of_day = -1
+		time_of_day = ""
 	#print out_name, subset, D['pred_duration'], time_of_day
 	main(D, out_name, subset, time_of_day)
 	
