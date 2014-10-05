@@ -313,11 +313,17 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 	#	json.dump(PredictionDic, outfile)
 	return PredictionDic
 
-def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime, pred_len):
+def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime, pred_len, time_of_day):
 	"""Turn the normalized predictions from (PredictionDic) back into the standard-form
 	estimates by using (DiurnalDic)."""
 	UnNormDic = {}
-	UnNormDic['Start'] = current_datetime.isoformat() #current time, each prediction is 5,10,...minutes after
+	if time_of_day == '': #meaning this was not explicitly set 
+		UnNormDic['Start'] = current_datetime.isoformat() #current time, each prediction is 5,10,...minutes after
+	else:
+		minutes_into_day = round(time_of_day * 288, 0) * 5
+		h = int(minutes_into_day / 60); m = int(minutes_into_day - 60 * h)
+		current_datetime = current_datetime.replace(hour = h, minute = m) #set this to the user-input start_time
+		UnNormDic['Start'] = current_datetime.isoformat()
 	for road in PredictionDic.keys(): #iterate over all pair_ids
 		min_time = MinimumDic[road] #shortest historical travel time for a roadway
 		UnNormDic[str(road)] = {}
@@ -508,7 +514,7 @@ def main(D, output_file_name, subset, time_of_day):
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
 									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, D['pred_duration'], time_of_day)
-	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime, D['pred_duration'])
+	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime, D['pred_duration'], time_of_day)
 	with open(os.path.join(D['update_path'], output_file_name), 'w') as outfile:
 		json.dump(CurrentPredDic, outfile)
 	return None
@@ -552,7 +558,7 @@ if __name__ == "__main__":
 		time_of_day = NCDC.RoundToNearestNth(time_of_day, 288, 3) #return a five minute fraction (0/288 to 277/288)
 	else: 
 		time_of_day = ""
-	print out_name, subset, D['pred_duration'], time_of_day
+	#print out_name, subset, D['pred_duration'], time_of_day
 	main(D, out_name, subset, time_of_day)
 	
 	
