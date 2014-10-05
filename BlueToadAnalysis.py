@@ -313,7 +313,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 	#	json.dump(PredictionDic, outfile)
 	return PredictionDic
 
-def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime):
+def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime, pred_len):
 	"""Turn the normalized predictions from (PredictionDic) back into the standard-form
 	estimates by using (DiurnalDic)."""
 	UnNormDic = {}
@@ -321,7 +321,7 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, c
 	for road in PredictionDic.keys(): #iterate over all pair_ids
 		min_time = MinimumDic[road] #shortest historical travel time for a roadway
 		UnNormDic[str(road)] = {}
-		std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic)
+		std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_len)
 		for p in PredictionDic[str(road)].keys():
 			norm_seq = PredictionDic[str(road)][str(p)]
 			UnNormDic[str(road)][str(p)] = [int(max(s + n, min_time)) for s,n in zip(std_seq, norm_seq)]
@@ -340,18 +340,28 @@ def NDigitString(n, num):
 	else:
 		return '0' * (n - n_digits) + str(num) #add the necessary leading zeros and return
 
-def GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic):
+def GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_len):
 	"""Given the (road), (day_of_week), the (current_datetime) at which we are looking to make predictions
-	forward in time, and the (DiurnalDic) used for baseline expectations, return the 288 next baseline
+	forward in time, and the (DiurnalDic) used for baseline expectations, return the (pred_len) next baseline
 	travel times.  Note, if we are beginning at 12pm on Sunday, within 24 hours, we will be making
 	predictions for the subsequent Monday morning, a different list from DiurnalDic"""
-	current_Diurnal_key = str(road) + "_" + str(day_of_week)
-	new_datetime = current_datetime + datetime.timedelta(minutes = 1440) #the 'next' day
-	new_day_of_week = AdjustDayOfWeek(current_datetime.day, new_datetime.day, day_of_week)
-	next_Diurnal_key = str(road) + "_" + str(new_day_of_week) #the DiurnalDic key for next-day predictions
+	current_Diurnal_key = str(road) + "_" + str(day_of_week); fixed_pred_len = pred_len #this will not be changed
 	day_index = GetIndexFromDatetime(current_datetime) #how many 5-minute intervals are we into the day
-	current_seq, next_seq = DiurnalDic[current_Diurnal_key][day_index+1:], DiurnalDic[next_Diurnal_key][0:day_index+1]
-	return current_seq + next_seq
+	future_days = (day_index + pred_len)/288
+	d_seq = [] #to be extended with each iteration of the loop
+	for d in range(future_days + 1): #how many days in the DiurnalDic must we consider?
+		if d == future_days and pred_len > 0: #if this the last day for which we need to access DiurnalDic
+			d_seq = d_seq + DiurnalDic[current_Diurnal_key][(day_index + 1):(day_index + pred_len - 1)]
+		elif pred_len > 0: #add another day of normalized estimates and step forward one day
+			new_datetime = current_datetime + datetime.timedelta(minutes = 1440) #the 'next' day
+			new_day_of_week = AdjustDayOfWeek(current_datetime.day, new_datetime.day, day_of_week) #which day of the week?
+			next_Diurnal_key = str(road) + "_" + str(new_day_of_week) #the DiurnalDic key for next-day predictions
+			d_seq = d_seq + DiurnalDic[current_Diurnal_key][(day_index + 1):] + DiurnalDic[next_Diurnal_key][0:day_index+1]
+			#step all values forward one day and remove 288 steps from pred_len
+			day_of_week = new_day_of_week; current_datetime = new_datetime; current_Diurnal_key = next_Diurnal_key; pred_len -= 288
+		else:
+			pass
+	return d_seq[:fixed_pred_len]
 
 def GetIndexFromDatetime(current_datetime):
 	"""Given the (current_datetime), which is a datetime object, return an index from 0 to 287,
@@ -498,7 +508,7 @@ def main(D, output_file_name, subset, time_of_day):
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
 									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, D['pred_duration'], time_of_day)
-	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime)
+	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime, D['pred_duration'])
 	with open(os.path.join(D['update_path'], output_file_name), 'w') as outfile:
 		json.dump(CurrentPredDic, outfile)
 	return None
@@ -542,7 +552,7 @@ if __name__ == "__main__":
 		time_of_day = NCDC.RoundToNearestNth(time_of_day, 288, 3) #return a five minute fraction (0/288 to 277/288)
 	else: 
 		time_of_day = ""
-	#print out_name, subset, D['pred_duration'], time_of_day
+	print out_name, subset, D['pred_duration'], time_of_day
 	main(D, out_name, subset, time_of_day)
 	
 	
