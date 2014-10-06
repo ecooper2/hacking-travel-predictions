@@ -189,16 +189,19 @@ def GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset, analys
 	descriptions in (subset) of whether we are interested in the same day or simply weekday/weekend matches,
 	return the list of daytimes that are appropriate."""
 	if analysis_day >= 0: #if we're working our way down to a specific day-of-the-week
-		return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week == analysis_day,
-									  traffic_sub_bt.time_of_day == current_time)], [analysis_day]
+		return traffic_sub_bt[np.logical_and(np.logical_and(traffic_sub_bt.day_of_week == analysis_day,
+									  traffic_sub_bt.time_of_day < current_time + 0.001), 
+									  traffic_sub_bt.time_of_day > current_time - 0.001)], [analysis_day]
 
 	else: #'S' in subset, grab weekday or weekends
 		if 'S' in subset: #it's a weekend
-			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week >= 5,
-									  traffic_sub_bt.time_of_day == current_time)], [5,6]
+			return traffic_sub_bt[np.logical_and(np.logical_and(traffic_sub_bt.day_of_week >= 5,
+									  traffic_sub_bt.time_of_day < current_time + 0.001), 
+									  traffic_sub_bt.time_of_day > current_time - 0.001)], [5,6]
 		else: #it's a weekday
-			return traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week < 5,
-									  traffic_sub_bt.time_of_day == current_time)], [0,1,2,3,4]
+			return traffic_sub_bt[np.logical_and(np.logical_and(traffic_sub_bt.day_of_week < 5,
+									  traffic_sub_bt.time_of_day < current_time + 0.001), 
+									  traffic_sub_bt.time_of_day > current_time - 0.001)], [0,1,2,3,4]
 
 def GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day, time_range, day_of_week, analysis_day = -1):
 	"""Return a dataframe which only contains entries with the same time as the present
@@ -224,8 +227,8 @@ def GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 				new_time = NCDC.GetTimeFromDateTime(new_datetime)
 				shift_day_of_week = LinDayOfWeekShift(day_of_week, shift)
 				new_day_of_week = AdjustDayOfWeek(testing_datetime.day, new_day, shift_day_of_week) #did we move into a new day?
-				correct_daytimes = correct_daytimes.append(traffic_sub_bt[np.logical_and(traffic_sub_bt.day_of_week == new_day_of_week,
-										  traffic_sub_bt.time_of_day == new_time)])
+				correct_daytimes = correct_daytimes.append(traffic_sub_bt[np.logical_and(np.logical_and(traffic_sub_bt.day_of_week == new_day_of_week,
+										  traffic_sub_bt.time_of_day < new_time + .001), traffic_sub_bt.time_of_day > new_time - .001)])
 	return correct_daytimes
 
 def LinDayOfWeekShift(day_of_week, shift):
@@ -293,7 +296,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			for p in pcts:
 				PredictionDic[str(a)][str(p)] = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
 							  #######Generate Predictions#####
-			print "Generating Predictions for site %d" % a
+			print "Generating Predictions for site %d with a subset of length %d" % (a, len(day_sub_bt))
 			for ind in xrange(pred_len): #for generating of predictions at each forward step
 				viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if day_sub_bt.index[i] + ind + 1 < L]
 				prediction_sub = sub_bt.iloc[viable_future_indices]
