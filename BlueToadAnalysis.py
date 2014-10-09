@@ -42,18 +42,21 @@ def GetDayOfWeek(date):
 											', ' + str(real_date.year), "%m %d, %Y").strftime('%w')
 	return (int(day_of_week) + 6) % 7 #adjusts from Monday = 1 to Monday = 0
 
-def DefineDiurnalCycle(sub_bt, day, five_minute_fractions, MA_smooth_fac):
+def DefineDiurnalCycle(sub_bt, day, five_minute_fractions, MA_smooth_fac, def_val):
 	"""Given a specific pair_id and day-of-the-week, return a diurnal cycle list, per five-minute
 	interval over the the 288 5-minute intervals of the day.  (MA_smooth_fac) defines the number
 	of five-minute intervals used to general the moving average.  Ex: 12 implies a one-hour total
-	window (30 minutes on either side)"""
+	window (30 minutes on either side).  (def_val) is a default value in the absence of other info."""
 	diurnal_cycle = []
 	times_of_day = [round(i - int(i),3) for i in sub_bt.insert_time] #just the fraction of the day
 	sub_bt['times_of_day'] = times_of_day
 	for f in five_minute_fractions:
-		sub_cycle = sub_bt[sub_bt.times_of_day == round(f,3)]
+		sub_cycle = sub_bt[sub_bt.times_of_day == round(f,3)] if len(sub_bt) > 0 else []
 		if len(sub_cycle) == 0: #meaning there are no examples on this day of the week at this time
-			diurnal_cycle.append(diurnal_cycle[-1]) #assume the previous five-minute timestamp's time
+			if len(diurnal_cycle) == 0:
+				diurnal_cycle.append(def_val) #assume the previous five-minute timestamp's time
+			else:
+				diurnal_cycle.append(diurnal_cycle[-1]) #with no other information default to the mean time at that roadway
 		else:
 			diurnal_cycle.append(np.mean(sub_cycle.travel_time))
 	return MA_Smooth_Circular(diurnal_cycle, MA_smooth_fac/2) #return after a moving-average smoothing
@@ -91,8 +94,8 @@ def GenerateDiurnalDic(bt, blue_toad_path, five_minute_fractions, window = 12):
 		for day in xrange(7): #over all days_of_the_week
 			print "Building diurnal cycle for roadway %d on day %d (Monday = 0, Sunday = 6)" % (u,day)
 			sub_bt = GetSubBlueToad(bt, u, day)
-			DiurnalDic[str(u) + "_" + str(day)] = DefineDiurnalCycle(sub_bt, day,
-											 five_minute_fractions, window)
+			DiurnalDic[str(u) + "_" + str(day)] = DefineDiurnalCycle(sub_bt, day, five_minute_fractions, 
+														window, np.mean(bt.travel_time)) #default to mean
 	return DiurnalDic
 
 def NormalizeTravelTime(bt, DiurnalDic, blue_toad_path, blue_toad_name):
@@ -100,14 +103,16 @@ def NormalizeTravelTime(bt, DiurnalDic, blue_toad_path, blue_toad_name):
 	the difference between the expected travel time from (DiurnalDic) and the actual
 	time reported by travel time. (actual - theoretical)"""
 	normalized_times = []
-	print "Now normalizing site %d" % int(bt.pair_id[0:1])
-	for p, d, i, t in zip(bt.pair_id, bt.day_of_week, bt.insert_time, bt.travel_time):
-		diurnal_key = str(p) + "_" + str(d) #to find the correct key of the dictionary
-		time_index = int((i - int(i)) * 288 + .0001)
-		normalized_times.append(t - DiurnalDic[diurnal_key][time_index])
-	bt['Normalized_t'] = normalized_times
-	bt.to_csv(os.path.join(blue_toad_path, blue_toad_name + "_Cleaned" + "_Normalized.csv"),
-						index = False)
+	if len(bt) > 0: 
+		print "Now normalizing site %d" % int(bt.pair_id[0:1])
+		for p, d, i, t in zip(bt.pair_id, bt.day_of_week, bt.insert_time, bt.travel_time):
+			diurnal_key = str(p) + "_" + str(d) #to find the correct key of the dictionary
+			time_index = int((i - int(i)) * 288 + .0001)
+			normalized_times.append(t - DiurnalDic[diurnal_key][time_index])
+		bt['Normalized_t'] = normalized_times
+	else:
+		bt['Normalized_t'] = []
+	bt.to_csv(os.path.join(blue_toad_path, blue_toad_name + "_Cleaned" + "_Normalized.csv"), index = False)
 	return bt
 
 def AppendWeatherInformation(weather_data, sub_bt):
@@ -117,7 +122,7 @@ def AppendWeatherInformation(weather_data, sub_bt):
 	for ins_t in sub_bt.insert_time: #for each time in sub_bt, define its weather
 		matched_index = (weather_data.bt_date == NCDC.RoundToNearestNth(ins_t,24,3)).nonzero()[0]
 		if len(matched_index) == 0: #no matching weather date
-			bt_weather.append('NONE')
+			bt_weather.append(' ') #Fair warning here...in the absence of weather, assume clear skies
 		else:
 			bt_weather.append(weather_data.WeatherType[int(matched_index[0])])
 	sub_bt['weather'] = bt_weather
@@ -151,9 +156,12 @@ def AttachWeatherData(bt, bt_path, bt_name, w_dir, w_site_name):
 	"""Given a (bt) dataset and a weather directory (w_dir) in which to find the relevant
 	data, process the appropriate (w_site_name), read and simplify weather data, then
 	attach the appropriate column to bt and write to file."""
-	print "Appending weather data for site %d" % int(bt.pair_id[0:1])
-	weather_data = ProcessWeatherData(w_dir, w_site_name)
-	bt = AppendWeatherInformation(weather_data, bt)
+	if len(bt) > 0:
+		print "Appending weather data for site %d" % int(bt.pair_id[0:1])
+		weather_data = ProcessWeatherData(w_dir, w_site_name)
+		bt = AppendWeatherInformation(weather_data, bt)
+	else:
+		bt['weather'] = []
 	bt.to_csv(os.path.join(bt_path, bt_name + "_Cleaned" + "_Normalized" + "_Weather.csv"), index = False)
 	return bt
 
@@ -263,7 +271,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 		PredictionDic[str(a)] = {}
 		if str(a) in ps_and_cs.keys(): #if we have access to current conditions at this locations
 			sub_bt = pd.read_csv(os.path.join(bt_path, "IndividualFiles", bt_name + "_" + str(a) +
-								"_" + "Cleaned_Normalized_Weather.csv"))
+								"_" + "Cleaned_Normalized_Weather.csv")).fillna(' ')
 			L = len(sub_bt) #how many examples, and more importantly, when does this end...
 			sub_bt.index = range(L) #re-index, starting from zero
 			if 'W' in subset:
@@ -291,22 +299,29 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 					time_range = time_range * 1.5
 					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))
+					if time_of_day != '' and len(day_sub_bt) < 5: #in this case, if the sample size is too small, with time_range set to 0, 
+						for p in pcts:				#we cannot expand the dataset...and so we should return an empty list.
+							PredictionDic[str(a)][str(p)] = []
+						break #exit the while loop
 			else:
 				day_sub_bt = traffic_sub_bt
-			for p in pcts:
-				PredictionDic[str(a)][str(p)] = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
-							  #######Generate Predictions#####
-			print "Generating Predictions for site %d with a subset of length %d" % (a, len(day_sub_bt))
-			for ind in xrange(pred_len): #for generating of predictions at each forward step
-				viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if day_sub_bt.index[i] + ind + 1 < L]
-				prediction_sub = sub_bt.iloc[viable_future_indices]
-				for p in pcts: #iterate over the percentiles required for estimation
-					if p == 'min': #if we're estimating a best case
-						PredictionDic[str(a)][str(p)].append(np.min(prediction_sub.Normalized_t))
-					elif p == 'max': #if we're estimating a worst case
-						PredictionDic[str(a)][str(p)].append(np.max(prediction_sub.Normalized_t))
-					else:
-						PredictionDic[str(a)][str(p)].append(np.percentile(prediction_sub.Normalized_t, p))
+			if len(day_sub_bt) > 0: 
+				for p in pcts:
+					PredictionDic[str(a)][str(p)] = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
+								  #######Generate Predictions#####
+				print "Generating Predictions for site %d with a subset of length %d" % (a, len(day_sub_bt))
+				for ind in xrange(pred_len): #for generating of predictions at each forward step
+					viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if day_sub_bt.index[i] + ind + 1 < L]
+					prediction_sub = sub_bt.iloc[viable_future_indices]
+					for p in pcts: #iterate over the percentiles required for estimation
+						if p == 'min': #if we're estimating a best case
+							PredictionDic[str(a)][str(p)].append(np.min(prediction_sub.Normalized_t))
+						elif p == 'max': #if we're estimating a worst case
+							PredictionDic[str(a)][str(p)].append(np.max(prediction_sub.Normalized_t))
+						else:
+							PredictionDic[str(a)][str(p)].append(np.percentile(prediction_sub.Normalized_t, p))
+			else:
+				print "no predictions generated for %d" % a
 		else: #use default...essentially dead-average conditions, flagged as -0.00001 rather than zero
 			print "No current information available for site %d, using default." % a
 			pred_list = [-0.00001 for i in range(D['pred_duration'])]
@@ -355,6 +370,9 @@ def GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_le
 	travel times.  Note, if we are beginning at 12pm on Sunday, within 24 hours, we will be making
 	predictions for the subsequent Monday morning, a different list from DiurnalDic"""
 	current_Diurnal_key = str(road) + "_" + str(day_of_week); fixed_pred_len = pred_len #this will not be changed
+	if current_Diurnal_key not in DiurnalDic.keys(): 
+		print "No data from segment %s historically on day %s, returning an empty list." % (str(road), str(day_of_week))
+		return []
 	day_index = GetIndexFromDatetime(current_datetime) #how many 5-minute intervals are we into the day
 	future_days = (day_index + pred_len)/288
 	d_seq = [] #to be extended with each iteration of the loop
@@ -365,6 +383,9 @@ def GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_le
 			new_datetime = current_datetime + datetime.timedelta(minutes = 1440) #the 'next' day
 			new_day_of_week = AdjustDayOfWeek(current_datetime.day, new_datetime.day, day_of_week) #which day of the week?
 			next_Diurnal_key = str(road) + "_" + str(new_day_of_week) #the DiurnalDic key for next-day predictions
+			if next_Diurnal_key not in DiurnalDic.keys(): 
+				print "No data from segment %s historically on day %s, defaulting to a static, 100s transit time." % (str(road), str(day_of_week))
+				return []
 			d_seq = d_seq + DiurnalDic[current_Diurnal_key][(day_index + 1):] + DiurnalDic[next_Diurnal_key][0:day_index+1]
 			#step all values forward one day and remove 288 steps from pred_len
 			day_of_week = new_day_of_week; current_datetime = new_datetime; current_Diurnal_key = next_Diurnal_key; pred_len -= 288
@@ -402,12 +423,13 @@ def DefineMinimums(D, all_pair_ids):
 		json.dump(MinimumDic, outfile)
 	return MinimumDic
 
-def GetZip(url):
-	"""Download a .zip file found at the (url) provided."""
+def GetZip(url, f_type):
+	"""Download a file found at the (url) provided of (f_type) 'csv' or 'zip'."""
+	f_type = '.' + f_type
 	try: # Open the url
 		f = urlopen(url)
 		print "downloading " + url
-		with open(os.path.join(D['bt_path'], "massdot_bluetoad_data.zip"), "wb") as local_file: # Open our local file for writing
+		with open(os.path.join(D['bt_path'], "massdot_bluetoad_data" + f_type), "wb") as local_file: # Open our local file for writing
 			local_file.write(f.read())
 	#handle errors
 	except HTTPError, e:
@@ -429,9 +451,12 @@ def SubBt_Cleaned_to_PreNormalized(D, a):
 	"""The cleaned bt file must be transformed from its original 'cleaned' format to a form with '/N' examples removed,
 	strings converted to floats, and a day-of-week column added where needed.  Use the parameter dictionary (D) to convert roadway (a)"""
 	sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
-	sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #remove "/N" examples
-	sub_bt = data.FloatConvert(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #convert strings to float where possible
-	sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
+	if len(sub_bt) > 0: 
+		sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #remove "/N" examples
+		sub_bt = data.FloatConvert(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #convert strings to float where possible
+		sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
+	else:
+		sub_bt['time_of_day'], sub_bt['day_of_week'] = [], []
 	return sub_bt
 
 def HardCodedParameters():
@@ -457,21 +482,33 @@ def HardCodedParameters():
 	"CoordsDic_name" : "RoadwayCoordsDic.txt", "NOAA_df_name" : "WeatherSites_MA.csv",
 	"WeatherInfo" : "ClosestWeatherSite.txt",
 	"WeatherURL" : "http://w1.weather.gov/xml/current_obs/",
-	"path_to_blue_toad" : "https://raw.githubusercontent.com/hackreduce/MassDOThack/master/Road_RTTM_Volume/massdot_bluetoad_data.zip"}
+	"bluetoad_type" : "csv", #can be set to 'csv' or 'zip'
+	"path_to_blue_toad_csv" :  "http://traffichackers.com/model_history.csv",
+	"path_to_blue_toad_zip" : "https://raw.githubusercontent.com/hackreduce/MassDOThack/master/Road_RTTM_Volume/massdot_bluetoad_data.zip"}
 
 	D["weather_dir"] = os.path.join(D['data_path'], "NCDC_Weather")
 	return D
 
-def main(D, output_file_name, subset, time_of_day):
-	"""Main module"""
+def PrePrep(D):
+	"""Given the parameter dictionary (D), create directories where needed and download BlueToad data."""
 	NOAA_df = pd.read_csv(os.path.join(D['data_path'], D['NOAA_df_name']))
 	if not os.path.exists(os.path.join(D["update_path"])): os.makedirs(os.path.join(D["update_path"])) #add directories if missing
 	if not os.path.exists(os.path.join(D["bt_path"])): os.makedirs(os.path.join(D["bt_path"]))
-	if not os.path.exists(os.path.join(D['bt_path'], D['bt_name'] + ".zip")): #download all data, then run a full update if it does not exist.
+	if "zip" in D['bluetoad_type']: #if we are downloading a large .zip to unpack before running
+		if not os.path.exists(os.path.join(D['bt_path'], D['bt_name'] + ".zip")): #download all data, then run a full update if it does not exist.
+			if not os.path.exists(os.path.join(D['bt_path'], D['bt_name'] + ".csv")):
+				url = D['path_to_blue_toad_zip']
+				GetZip(url, 'zip'); Unzip(D['bt_name'], D['bt_path']) #download the file, and unzip it.
+	elif "csv" in D['bluetoad_type']: #if we are downloading a .csv before running
 		if not os.path.exists(os.path.join(D['bt_path'], D['bt_name'] + ".csv")):
-			url = D['path_to_blue_toad']
-			GetZip(url); Unzip(D['bt_name'], D['bt_path']) #download the file, and unzip it.
+			url = D['path_to_blue_toad_csv']
+			GetZip(url, 'csv')
 	if not os.path.exists(os.path.join(D["update_path"], "IndividualFiles")): os.makedirs(os.path.join(D["update_path"], "IndividualFiles"))
+	return NOAA_df
+	
+def main(D, output_file_name, subset, time_of_day):
+	"""Main module"""
+	NOAA_df = PrePrep(D) #create directories and/or download bluetoad data if required.
 	data.GetBlueToad(D, D['bt_name']) #read it in and re-format dates
 	all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
 	if not os.path.exists(os.path.join(D['update_path'], 'DiurnalDictionary.txt')): #if this dictionary doesn't exist, we'll fill it
