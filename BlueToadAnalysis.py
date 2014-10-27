@@ -340,7 +340,7 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, c
 	else:
 		minutes_into_day = round(time_of_day * 288, 0) * 5
 		h = int(minutes_into_day / 60); m = int(minutes_into_day - 60 * h)
-		current_datetime = current_datetime.replace(hour = h, minute = m) #set this to the user-input start_time
+		current_datetime = current_datetime.replace(hour = h, minute = m, second = 0) #set this to the user-input start_time
 		UnNormDic['Start'] = current_datetime.isoformat()
 	for road in PredictionDic.keys(): #iterate over all pair_ids
 		min_time = MinimumDic[road] #shortest historical travel time for a roadway
@@ -598,7 +598,7 @@ if __name__ == "__main__":
 		time_of_day = NCDC.RoundToNearestNth(time_of_day, 288, 3) #return a five minute fraction (0/288 to 277/288)
 	else: 
 		time_of_day = ""
-	#print out_name, subset, D['pred_duration'], time_of_day
+	print out_name, subset, D['pred_duration'], time_of_day
 	main(D, out_name, subset, time_of_day)
 	
 	
