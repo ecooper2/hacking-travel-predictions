@@ -548,6 +548,8 @@ def main(D, output_file_name, subset, time_of_day):
 	if time_of_day == "": #if we are interested in predictions based on current conditions
 		pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)
 	else: #zero-out the normalized conditions, historical analysis starts from a normalized baseline of zero (typical conditions)
+		if subset[-1] in ['0','1','2','3','4','5','6']: #if there is a prescribed day_of_week...
+			day_of_week = int(subset[-1]) #force day_of_week to chosen day rather than current day
 		for k in pairs_and_conditions.keys():
 			pairs_and_conditions[k][0] = 0
 	if 'O' in subset: subset += str(day_of_week) #this means we are running the model based on whatever 'today' is.
