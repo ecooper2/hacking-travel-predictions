@@ -10,6 +10,7 @@ import NCDC_WeatherProcessor as NCDC
 import datetime as dt
 import numpy as np
 import os
+import datetime
 
 def ParseJson(current_transit_dict):
 	"""Given a json taken from mass-dot's real-time feed (current_transit_dict), 
@@ -65,12 +66,20 @@ def GetCurrentInfo(massdot_current, DiurnalDic):
 def ConvertCurrentTimeToDatetime(current_time):
 	"""Given a (current_time), convert this string into the format associated with the datetime functions
 	used to manipulate times and dates.  Typically, this tuple is (year, month, day, hour, minute, second, ...)"""
+
+	current_time = 'Mon Oct 27 2014 21:04:57 GMT-0400 (EDT)'
+        time_zone_position = current_time.find('GMT-0400 (EDT)')
+        current_time_filtered = current_time[0:time_zone_position-1]
+        return datetime.datetime.strptime(current_time_filtered, "%a %b %d %Y %H:%M:%S")	
+	
+        '''
 	month_dic = {'Jan' : 1, 'Feb' : 2, 'Mar' : 3, 'Apr' : 4, 'May': 5, 'Jun' : 6, 'Jul' : 7, 'Aug' : 8,
 				 'Sep' : 9, 'Oct' : 10, 'Nov' : 11, 'Dec' : 12} #ANDREW, VERIFY THESE ARE YOUR PREFIXES!
 	date, time, time_zone = current_time.split() #currently ignore time_zone, assumed to be GMT
 	month, day, year = date.split('-'); 
 	hour, minute, second = time.split(':')
 	return dt.datetime(int(year), month_dic[month], int(day), int(hour), int(minute), int(second))
+	'''
 
 def GetRoadAveCoords(road_coord_list):
 	"""Lat/Lons are provided for each pair_id in the form of lists.  This function simply returns
