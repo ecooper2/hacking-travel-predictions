@@ -68,9 +68,9 @@ def ConvertCurrentTimeToDatetime(current_time):
 	used to manipulate times and dates.  Typically, this tuple is (year, month, day, hour, minute, second, ...)"""
 
 	current_time = 'Mon Oct 27 2014 21:04:57 GMT-0400 (EDT)'
-        time_zone_position = current_time.find('GMT-0400 (EDT)')
-        current_time_filtered = current_time[0:time_zone_position-1]
-        return datetime.datetime.strptime(current_time_filtered, "%a %b %d %Y %H:%M:%S")	
+	time_zone_position = current_time.find('GMT-0400 (EDT)')
+	current_time_filtered = current_time[0:time_zone_position-1]
+	return datetime.datetime.strptime(current_time_filtered, "%a %b %d %Y %H:%M:%S")	
 	
         '''
 	month_dic = {'Jan' : 1, 'Feb' : 2, 'Mar' : 3, 'Apr' : 4, 'May': 5, 'Jun' : 6, 'Jul' : 7, 'Aug' : 8,
