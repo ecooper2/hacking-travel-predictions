@@ -289,11 +289,11 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
 				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
 					time_range = time_range * 1.5
-					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
+					day_sub_bt = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
 			elif ('0' in subset or '1' in subset or '2' in subset or '3' in subset 
 				  or '4' in subset or '5' in subset or '6' in subset): #it's a specific day-of-week
-				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
+				day_sub_bt = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))				  
 				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
 					time_range = time_range * 1.5
@@ -331,12 +331,23 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 	#	json.dump(PredictionDic, outfile)
 	return PredictionDic
 
+def RoundToFive(current_datetime):
+	"""Rounds a (current_datetime) to the nearest multiple of 5."""
+	minute = current_datetime.minute; second = current_datetime.second
+	rounded_minute = int(float(minute)/5 + float(second)/60/5 + .5)*5
+	if rounded_minute == 60:
+		current_datetime = current_datetime.replace(minute = 0, second = 0)
+		current_datetime = current_datetime + datetime.timedelta(minutes = 60)
+	else:
+		current_datetime = current_datetime.replace(minute = rounded_minute, second = 0)
+	return current_datetime
+	
 def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime, pred_len, time_of_day):
 	"""Turn the normalized predictions from (PredictionDic) back into the standard-form
 	estimates by using (DiurnalDic)."""
 	UnNormDic = {}
 	if time_of_day == '': #meaning this was not explicitly set 
-		UnNormDic['Start'] = current_datetime.isoformat() #current time, each prediction is 5,10,...minutes after
+		UnNormDic['Start'] = RoundToFive(current_datetime).isoformat() #current time, each prediction is 5,10,...minutes after
 	else:
 		minutes_into_day = round(time_of_day * 288, 0) * 5
 		h = int(minutes_into_day / 60); m = int(minutes_into_day - 60 * h)
