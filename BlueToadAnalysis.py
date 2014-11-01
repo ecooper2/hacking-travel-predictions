@@ -261,6 +261,13 @@ def AdjustDayOfWeek(current_day, new_day, day_of_week):
 	elif new_day - current_day < 1: # moving from the 30th/31st of a month to the 1st of the succeeding month
 		return (day_of_week + 1) % 7
 
+def	AddEmptyDic(a, pcts, PredictionDic):
+	"""For a given roadway (a), a list of percentages to consider (pcts), and a (PredictionDic),
+	fill each index with empty lists..."""
+	for p in pcts:				#we cannot expand the dataset...and so we should return an empty list.
+		PredictionDic[str(a)][str(p)] = []
+	return PredictionDic	
+		
 def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_of_week, current_datetime, pct_range, 
 								  time_range, bt_path, bt_name, pcts, subset, pred_len, time_of_day):
 	"""Iterate over all pair_ids and determine similar matches in terms of time_of_day,
@@ -279,6 +286,10 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			else:
 				weather_sub_bt = sub_bt
 			L_w = len(weather_sub_bt)
+			if L_w == 0:
+				print "NO HISTORICAL EXAMPLES OF THIS WEATHER TYPE AT ROADWAY %d." % a
+				PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
+				break
 			if 'T' in subset:
 				traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range, L_w)
 			else:
@@ -300,9 +311,8 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))
 					if time_of_day != '' and len(day_sub_bt) < 5: #in this case, if the sample size is too small, with time_range set to 0, 
-						for p in pcts:				#we cannot expand the dataset...and so we should return an empty list.
-							PredictionDic[str(a)][str(p)] = []
-						break #exit the while loop
+						 PredictionDic = AddEmptyDic(a, pcts, PredictionDic)	
+					break #exit the while loop
 			else:
 				day_sub_bt = traffic_sub_bt
 			if len(day_sub_bt) > 0: 
@@ -526,8 +536,8 @@ def main(D, output_file_name, subset, time_of_day):
 		DiurnalDic = {} #To be appended, site by site
 	else: #just read it it from file
 		DiurnalDic = GetJSON(D['update_path'], "DiurnalDictionary.txt")
-	if os.path.exists(os.path.join(D['update_path'], D['CoordsDic_name'])):	#if we've already built it
-		RoadwayCoordsDic = GetJSON(D['update_path'], D['CoordsDic_name'])
+	if os.path.exists(os.path.join(D['data_path'], D['CoordsDic_name'])):	#if we've already built it
+		RoadwayCoordsDic = GetJSON(D['data_path'], D['CoordsDic_name'])
 	else:
 		RoadwayCoordsDic = mass.GetLatLons(D['data_path'], "Roadway_LatLonData.txt")
 	if not os.path.exists(os.path.join(D['update_path'], D['WeatherInfo'])): #if we lack minimums for each site

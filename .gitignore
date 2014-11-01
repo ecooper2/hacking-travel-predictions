@@ -38,5 +38,7 @@ nosetests.xml
 # Stores the large blue toad analysis files in their zipped or unzipped forms
 scratch/
 
+# Random, unused code
+Graveyard.py
 # Stores various files created (if necessary) during runtime 
 update/
