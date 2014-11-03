@@ -289,13 +289,12 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			if L_w == 0:
 				print "NO HISTORICAL EXAMPLES OF THIS WEATHER TYPE AT ROADWAY %d." % a
 				PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
-				break
-			if 'T' in subset:
+			if 'T' in subset and PredictionDic[str(a)] == {}:
 				traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range, L_w)
 			else:
 				traffic_sub_bt = weather_sub_bt
 			#locate similar days/times, more lax search in less common weather
-			if 'Y' in subset or 'S' in subset: #if we need to choose only certain days of the week
+			if ('Y' in subset or 'S' in subset) and PredictionDic[str(a)] == {}: #if we need to choose only certain days of the week
 				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
 				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
@@ -303,7 +302,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 					day_sub_bt = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
 			elif ('0' in subset or '1' in subset or '2' in subset or '3' in subset 
-				  or '4' in subset or '5' in subset or '6' in subset): #it's a specific day-of-week
+				  or '4' in subset or '5' in subset or '6' in subset) and PredictionDic[str(a)] == {}: #it's a specific day-of-week
 				day_sub_bt = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))				  
 				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
@@ -311,8 +310,8 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))
 					if time_of_day != '' and len(day_sub_bt) < 5: #in this case, if the sample size is too small, with time_range set to 0, 
-						 PredictionDic = AddEmptyDic(a, pcts, PredictionDic)	
-					break #exit the while loop
+						PredictionDic = AddEmptyDic(a, pcts, PredictionDic)	
+						break #exit the while loop
 			else:
 				day_sub_bt = traffic_sub_bt
 			if len(day_sub_bt) > 0: 
