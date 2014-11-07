@@ -95,7 +95,7 @@ def GetLatLons(bt_path, file_name):
 	for i in range(len(lat_lons['segments'])): #iterate over all roadways
 		road_lat, road_lon = GetRoadAveCoords(lat_lons['segments'][i][1])
 		RoadwayCoordsDic[str(int(lat_lons['segments'][i][0]))] = {"Lat" : road_lat, "Lon" : road_lon}
-	with open(os.path.join(bt_path, 'RoadwayCoordsDic.txt'), 'w') as outfile:
+	with open(os.path.join(bt_path, 'RoadwayCoordsDic.txt'), 'wb') as outfile:
 		json.dump(RoadwayCoordsDic, outfile)
 	return RoadwayCoordsDic
 	

@@ -336,7 +336,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			pred_list = [-0.00001 for i in range(D['pred_duration'])]
 			for p in pcts: #NOTE, WITHOUT CURRENT INFO, ALL PERCENTILES WILL BE THE SAME (DEFAULT)
 				PredictionDic[str(a)][str(p)] = pred_list
-	#with open(os.path.join(bt_path, 'CurrentPredictions.txt'), 'w') as outfile:
+	#with open(os.path.join(bt_path, 'CurrentPredictions.txt'), 'wb') as outfile:
 	#	json.dump(PredictionDic, outfile)
 	return PredictionDic
 
@@ -439,7 +439,7 @@ def DefineMinimums(D, all_pair_ids):
 			MinimumDic[str(a)] = np.min(site_df.travel_time)
 		else:
 			MinimumDic[str(a)] = 0.001 #the flag for a missing minimum time (avoids division by 0)
-	with open(os.path.join(D['update_path'], 'MinimumPredictions.txt'), 'w') as outfile:
+	with open(os.path.join(D['update_path'], 'MinimumPredictions.txt'), 'wb') as outfile:
 		json.dump(MinimumDic, outfile)
 	return MinimumDic
 
@@ -535,6 +535,7 @@ def main(D, output_file_name, subset, time_of_day):
 		DiurnalDic = {} #To be appended, site by site
 	else: #just read it it from file
 		DiurnalDic = GetJSON(D['update_path'], "DiurnalDictionary.txt")
+	DD_flag = False #assume we do NOT need to alter DiurnalDic...
 	if os.path.exists(os.path.join(D['data_path'], D['CoordsDic_name'])):	#if we've already built it
 		RoadwayCoordsDic = GetJSON(D['data_path'], D['CoordsDic_name'])
 	else:
@@ -544,7 +545,7 @@ def main(D, output_file_name, subset, time_of_day):
 	else:
 		NOAADic = GetJSON(D['update_path'], D['WeatherInfo']) #read in the locations of closest weather sites
 	for a in all_pair_ids.pair_id: #process by site,
-		flag = 0; DD_flag = False ##Check if we've gone through the normalization steps...
+		flag = 0; ##Check if we've gone through the normalization steps...
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):
 			sub_bt = SubBt_Cleaned_to_PreNormalized(D, a); flag = 1 #to note that this process is already done.
 		if str(a) + "_0" not in DiurnalDic.keys(): #if the DiurnalDictionary is still empty
@@ -557,9 +558,9 @@ def main(D, output_file_name, subset, time_of_day):
 			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
 			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D['weather_dir'], D["weather_site_default"])
 			#Write full DiurnalDictionary to a .txt file as a .json
-		if DD_flag:
-			with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'w') as outfile:
-				json.dump(DiurnalDic, outfile)
+	if DD_flag:
+		with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'wb') as outfile:
+			json.dump(DiurnalDic, outfile)
 	if not os.path.exists(os.path.join(D['update_path'], 'MinimumPredictions.txt')): #if we lack minimums for each site
 		MinimumDic = DefineMinimums(D, all_pair_ids)
 	else:
@@ -581,7 +582,7 @@ def main(D, output_file_name, subset, time_of_day):
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
 									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, D['pred_duration'], time_of_day)
 	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime, D['pred_duration'], time_of_day)
-	with open(os.path.join(D['update_path'], output_file_name), 'w') as outfile:
+	with open(os.path.join(D['update_path'], output_file_name), 'wb') as outfile:
 		json.dump(CurrentPredDic, outfile)
 	return None
 	

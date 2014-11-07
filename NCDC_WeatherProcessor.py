@@ -160,7 +160,7 @@ def BuildClosestNOAADic(NOAA_df, pair_ids, D):
 	NOAA_site_dic = {}
 	for p in pair_ids:
 		NOAA_site_dic[str(p)] = ChooseClosestSite(p, RoadwayCoords, NOAA_df, D) #whichever weather site is closest in Euclidean terms
-	with open(os.path.join(D['update_path'], 'ClosestWeatherSite.txt'), 'w') as outfile:
+	with open(os.path.join(D['update_path'], 'ClosestWeatherSite.txt'), 'wb') as outfile:
 		json.dump(NOAA_site_dic, outfile)
 	return NOAA_site_dic
 	
