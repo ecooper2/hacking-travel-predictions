@@ -544,6 +544,7 @@ def main(D, output_file_name, subset, time_of_day):
 		NOAADic = NCDC.BuildClosestNOAADic(NOAA_df, all_pair_ids.pair_id, D) #which weather site for which roadway?
 	else:
 		NOAADic = GetJSON(D['update_path'], D['WeatherInfo']) #read in the locations of closest weather sites
+	DD_flag = False  	
 	for a in all_pair_ids.pair_id: #process by site,
 		flag = 0; ##Check if we've gone through the normalization steps...
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):
@@ -557,7 +558,7 @@ def main(D, output_file_name, subset, time_of_day):
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv")):
 			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
 			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D['weather_dir'], D["weather_site_default"])
-			#Write full DiurnalDictionary to a .txt file as a .json
+	#Write full DiurnalDictionary to a .txt file as a .json
 	if DD_flag:
 		with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'wb') as outfile:
 			json.dump(DiurnalDic, outfile)
