@@ -8,11 +8,23 @@ fi
 wait
 echo "model runs complete"
 
-# Upload to the Amazon Web Services S3 Store
-aws s3 cp update/similar_dow.json s3://traffichackers/data/predictions/similar_dow.json --region us-east-1 &
+# Compress the Model Outputs
+gzip -9 --keep --force update/similar_dow.json &
 if [[ $(date +%u) -gt 5 ]] ; then
-  aws s3 cp update/similar_weekdays.json s3://traffichackers/data/predictions/similar_weekdays.json --region us-east-1 &
+  gzip -9 --keep --force update/similar_weekends.json &
 else
-  aws s3 cp update/similar_weekends.json s3://traffichackers/data/predictions/similar_weekends.json --region us-east-1
+  gzip -9 --keep --force update/similar_weekdays.json &
+fi
 wait
-echo "aws s3 upload complete" 
+echo "compression complete"
+
+# Upload to the Amazon Web Services S3 Store
+aws s3 cp update/similar_dow.json.gz s3://traffichackers/data/predictions/similar_dow.json --region us-east-1 --content-encoding gzip --content-type application/json &
+if [[ $(date +%u) -gt 5 ]] ; then
+  aws s3 cp update/similar_weekends.json.gz s3://traffichackers/data/predictions/similar_weekends.json --region us-east-1 --content-encoding gzip --content-type application/json &
+else
+  aws s3 cp update/similar_weekdays.json.gz  s3://traffichackers/data/predictions/similar_weekdays.json --region us-east-1 --content-encoding gzip --content-type application/json &
+fi
+wait
+echo "aws s3 upload complete"
+ 
