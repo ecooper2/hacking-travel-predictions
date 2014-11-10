@@ -573,9 +573,9 @@ def main(D, output_file_name, subset, time_of_day):
 		if subset[-1] in ['0','1','2','3','4','5','6']: #if there is a prescribed day_of_week...
 			day_of_week = int(subset[-1]) #force day_of_week to chosen day rather than current day
 		elif 'S' in subset:
-			day_of_week = 5 #to ensure appropriate UnNormalization (Sat - Sun as weekend standard)
+			day_of_week = max(5, day_of_week) #to ensure appropriate UnNormalization (Sat - Sun as weekend standard)
 		elif 'Y' in subset:
-			day_of_week = 1 #to ensure appropriate UnNormalization (Tue - Thu as weekday standard)
+			day_of_week = 1 if day_of_week > 4 #to ensure appropriate UnNormalization (Tue - Thu as weekday standard)
 		for k in pairs_and_conditions.keys():
 			pairs_and_conditions[k][0] = 0
 	if 'O' in subset: subset += str(day_of_week) #this means we are running the model based on whatever 'today' is.
