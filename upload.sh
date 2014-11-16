@@ -9,10 +9,10 @@ wait
 echo "model runs complete"
 
 # Upload to the Amazon Web Services S3 Store
-aws s3 cp update/similar_dow.json s3://traffichackers/data/predictions/similar_dow.json --region us-east-1 &
+aws s3 cp update/similar_dow.json s3://www.traffichackers.com/data/predictions/similar_dow.json --region us-east-1 &
 if [[ $(date +%u) -gt 5 ]] ; then
-  aws s3 cp update/similar_weekdays.json s3://traffichackers/data/predictions/similar_weekdays.json --region us-east-1 &
+  aws s3 cp update/similar_weekdays.json s3://www.traffichackers.com/data/predictions/similar_weekdays.json --region us-east-1 &
 else
-  aws s3 cp update/similar_weekends.json s3://traffichackers/data/predictions/similar_weekends.json --region us-east-1
+  aws s3 cp update/similar_weekends.json s3://www.traffichackers.com/data/predictions/similar_weekends.json --region us-east-1
 wait
-echo "aws s3 upload complete" 
+echo "aws s3 upload complete"
