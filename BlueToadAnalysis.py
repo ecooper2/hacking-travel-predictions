@@ -498,12 +498,12 @@ def HardCodedParameters():
 	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
 										#along with the best and worst-case scenarios
 	"path_to_lat_lons" : "https://github.com/apcollier/hacking-travel/blob/master/js/segments.js",
-	"path_to_current" : "http://traffichackers.com/data/current.json", #traffichackers.com/data/predictions/similar_dow.json
+	"path_to_current" : "http://acollier.com/traffichackers/data/current.json", #traffichackers.com/data/predictions/similar_dow.json
 	"CoordsDic_name" : "RoadwayCoordsDic.txt", "NOAA_df_name" : "WeatherSites_MA.csv",
 	"WeatherInfo" : "ClosestWeatherSite.txt",
 	"WeatherURL" : "http://w1.weather.gov/xml/current_obs/",
 	"bluetoad_type" : "csv", #can be set to 'csv' or 'zip'
-	"path_to_blue_toad_csv" :  "http://traffichackers.com/model_history.csv",
+	"path_to_blue_toad_csv" :  "http://acollier.com/traffichackers/model_history.csv",
 	"path_to_blue_toad_zip" : "https://raw.githubusercontent.com/hackreduce/MassDOThack/master/Road_RTTM_Volume/massdot_bluetoad_data.zip"}
 
 	D["weather_dir"] = os.path.join(D['data_path'], "NCDC_Weather")
