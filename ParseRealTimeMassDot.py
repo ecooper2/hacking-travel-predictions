@@ -80,6 +80,27 @@ def ConvertCurrentTimeToDatetime(current_time):
 	return dt.datetime(int(year), month_dic[month], int(day), int(hour), int(minute), int(second))
 	'''
 
+def YYYYDOY_to_Datetime(date):
+	"""Given a (date) of the YYYYDOY format, convert this to a datetime format"""
+	year = int(date)/1000
+	day = int(date - year*1000)
+	day_frac = NCDC.RoundToNearestNth(date - int(date), 288, 3) #closest five-minute mark
+	mins_into_day = int(day_frac * 1440 / 5 + 0.5)*5 #how many minutes into the day?
+	leap_years = [1900 + 4*x for x in range(50)] #runs until 2096 for potential leap_years
+	days_in_month = np.cumsum([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]) #to covert into day_of_year		
+	if year in leap_years: 
+		days_in_month[1:] += 1
+	for i,d in enumerate(days_in_month):
+		if d > day and i > 0:
+			month = i+1; day_of_month = day - days_in_month[i-1] + 1
+			break	
+		elif d > day:
+			month = i+1; day_of_month = day + 1
+			break
+	hour = mins_into_day/60
+	minute = mins_into_day - hour * 60
+	return dt.datetime(year, month, day_of_month, hour, minute, 0)
+	
 def GetRoadAveCoords(road_coord_list):
 	"""Lat/Lons are provided for each pair_id in the form of lists.  This function simply returns
 	the average lat and lon for each individual stretch of roadway."""

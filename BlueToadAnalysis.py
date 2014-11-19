@@ -267,9 +267,27 @@ def	AddEmptyDic(a, pcts, PredictionDic):
 	for p in pcts:				#we cannot expand the dataset...and so we should return an empty list.
 		PredictionDic[str(a)][str(p)] = []
 	return PredictionDic	
-		
+
+def NoPrediction(all_pair_ids, D):
+	"""In this case, we are not generating predictions, but rather reporting the historical values
+	in json format."""	
+	ReportDictionary = {}
+	for a in all_pair_ids.pair_id:
+		print 'Reporting times (without prediction) for roadway %d' % a
+		ReportDictionary[str(a)] = {'travel_time' : [], 'insert_time' : []}
+		sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) +
+								"_" + "Cleaned_Normalized_Weather.csv")).fillna(' ')
+		sub_bt = sub_bt[np.logical_and(sub_bt.insert_time >= D['start_date'], sub_bt.insert_time <= D['end_date'])]
+		for i,t in zip(sub_bt.insert_time, sub_bt.travel_time):
+			ReportDictionary[str(a)]['travel_time'].append(t)
+			ReportDictionary[str(a)]['insert_time'].append(mass.YYYYDOY_to_Datetime(i).isoformat())	
+	ReportDictionary['Start'] = mass.YYYYDOY_to_Datetime(D['start_date']).isoformat()
+	ReportDictionary['End'] = mass.YYYYDOY_to_Datetime(D['end_date']).isoformat()
+	return ReportDictionary	
+	
 def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_of_week, current_datetime, pct_range, 
-								  time_range, bt_path, bt_name, pcts, subset, pred_len, time_of_day):
+								  time_range, bt_path, bt_name, pcts, subset, pred_len, time_of_day,
+								  start_date, end_date):
 	"""Iterate over all pair_ids and determine similar matches in terms of time_of_day,
 	weather, traffic, and day_of_week...and generate 288 five-minute predictions (a
 	24-hour prediction in 5-minute intervals)"""
@@ -279,6 +297,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 		if str(a) in ps_and_cs.keys(): #if we have access to current conditions at this locations
 			sub_bt = pd.read_csv(os.path.join(bt_path, "IndividualFiles", bt_name + "_" + str(a) +
 								"_" + "Cleaned_Normalized_Weather.csv")).fillna(' ')
+			sub_bt = sub_bt[np.logical_and(sub_bt.insert_time >= start_date, sub_bt.insert_time <= end_date)]
 			L = len(sub_bt) #how many examples, and more importantly, when does this end...
 			sub_bt.index = range(L) #re-index, starting from zero
 			if 'W' in subset:
@@ -484,7 +503,7 @@ def HardCodedParameters():
 	D = {"bt_path" : os.path.join("scratch"),
 	"update_path" : os.path.join("update"),
 	"data_path" : os.path.join("data"),
-	"bt_name" : "massdot_bluetoad_data",
+	"bt_name" : "massdot_bluetoad_data_old",
 	"pred_duration" : 288, #hours of prediction
 	"weather_site_name" : "closest", "weather_site_default" : "BostonAirport",
 	'w_def': 'Boston, Logan International Airport ',
@@ -525,6 +544,16 @@ def PrePrep(D):
 			GetZip(url, 'csv')
 	if not os.path.exists(os.path.join(D["update_path"], "IndividualFiles")): os.makedirs(os.path.join(D["update_path"], "IndividualFiles"))
 	return NOAA_df
+
+def PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
+					DiurnalDic, MinimumDic, day_of_week, current_datetime):
+	"""Generate forward predictions, then unnormalize and return in dictionary form"""
+	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
+									day_of_week, current_datetime, D['pct_range'], D['time_range'],
+									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, 
+									D['pred_duration'], time_of_day, D['start_date'], D['end_date'])
+	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime, D['pred_duration'], time_of_day)
+	return CurrentPredDic
 	
 def main(D, output_file_name, subset, time_of_day):
 	"""Main module"""
@@ -566,23 +595,24 @@ def main(D, output_file_name, subset, time_of_day):
 		MinimumDic = DefineMinimums(D, all_pair_ids)
 	else:
 		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
-	day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
-	if time_of_day == "": #if we are interested in predictions based on current conditions
-		pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)
-	else: #zero-out the normalized conditions, historical analysis starts from a normalized baseline of zero (typical conditions)
-		if subset[-1] in ['0','1','2','3','4','5','6']: #if there is a prescribed day_of_week...
-			day_of_week = int(subset[-1]) #force day_of_week to chosen day rather than current day
-		elif 'S' in subset:
-			day_of_week = max(5, day_of_week) #to ensure appropriate UnNormalization (Sat - Sun as weekend standard)
-		elif 'Y' in subset:
-			day_of_week = 1 if day_of_week > 4 else day_of_week #to ensure appropriate UnNormalization (Tue - Thu as weekday standard)
-		for k in pairs_and_conditions.keys():
-			pairs_and_conditions[k][0] = 0
-	if 'O' in subset: subset += str(day_of_week) #this means we are running the model based on whatever 'today' is.
-	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
-									day_of_week, current_datetime, D['pct_range'], D['time_range'],
-									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, D['pred_duration'], time_of_day)
-	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, day_of_week, current_datetime, D['pred_duration'], time_of_day)
+	if D['predict'] != 0: #if we are generating forward predictions 
+		day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
+		if time_of_day == "": #if we are interested in predictions based on current conditions
+			pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)
+		else: #zero-out the normalized conditions, historical analysis starts from a normalized baseline of zero (typical conditions)
+			if subset[-1] in ['0','1','2','3','4','5','6']: #if there is a prescribed day_of_week...
+				day_of_week = int(subset[-1]) #force day_of_week to chosen day rather than current day
+			elif 'S' in subset:
+				day_of_week = max(5, day_of_week) #to ensure appropriate UnNormalization (Sat - Sun as weekend standard)
+			elif 'Y' in subset:
+				day_of_week = 1 if day_of_week > 4 else day_of_week #to ensure appropriate UnNormalization (Tue - Thu as weekday standard)
+			for k in pairs_and_conditions.keys():
+				pairs_and_conditions[k][0] = 0
+		if 'O' in subset: subset += str(day_of_week) #this means we are running the model based on whatever 'today' is.
+			CurrentPredDic = PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
+							DiurnalDic, MinimumDic, day_of_week, current_datetime)
+	else: #no need to spend time on gathering similar sets and unnormalizing
+		CurrentPredDic = NoPrediction(all_pair_ids, D) #if we are simply reporting a JSON for the relevant time subset
 	with open(os.path.join(D['update_path'], output_file_name), 'wb') as outfile:
 		json.dump(CurrentPredDic, outfile)
 	return None
@@ -601,6 +631,12 @@ if __name__ == "__main__":
 	parser.add_argument("-l", "--length", help = "user-specified duration, in five-minute increments, default of 288 (one day)", 
 						type = int, default = 288) 
 	parser.add_argument("-hr", "--hour", help = "choose an hour of the day, of the form 00:00 - 23:59.  It will round to the nearest 5min.  It negates the usage of weather or traffic.", type = str, default = '')
+	parser.add_argument("-sd", "--start_date", help = "the start date to be considered from the historical data (YYYYDOY format).",
+						type = int, default = 0)
+	parser.add_argument("-ed", "--end_date", help = "the end date to be considered from the historical data (YYYYDOY format).",
+						type = int, default = 9999999)
+	parser.add_argument("-p", "--predict", help = "set to any value other than 0 to make predictions rather than report the data itself.",
+						type = int, default = 1)
 	args = parser.parse_args()
 
 	subset = '' #to be added based on user provided arguments:
@@ -618,6 +654,12 @@ if __name__ == "__main__":
 	else:
 		subset += str(D['day_dict'][args.day]); 
 	out_name = args.output_file_name
+	
+	#define the temporal span to be considered
+	D['start_date'] = start_date; D['end_date'] = end_date
+	
+	#define whether predictive analytics are necessary
+	D['predict'] = predict
 	
 	if args.hour != '' and ":" in args.hour and len(args.hour) == 5: #if we are looking for a specific day/time pairing historically rather than a prediction based on current conditions
 		hour, minute = args.hour.split(":")
