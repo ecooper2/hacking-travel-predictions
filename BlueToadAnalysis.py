@@ -609,7 +609,7 @@ def main(D, output_file_name, subset, time_of_day):
 			for k in pairs_and_conditions.keys():
 				pairs_and_conditions[k][0] = 0
 		if 'O' in subset: subset += str(day_of_week) #this means we are running the model based on whatever 'today' is.
-			CurrentPredDic = PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
+		CurrentPredDic = PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
 							DiurnalDic, MinimumDic, day_of_week, current_datetime)
 	else: #no need to spend time on gathering similar sets and unnormalizing
 		CurrentPredDic = NoPrediction(all_pair_ids, D) #if we are simply reporting a JSON for the relevant time subset
