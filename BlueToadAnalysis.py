@@ -656,10 +656,10 @@ if __name__ == "__main__":
 	out_name = args.output_file_name
 	
 	#define the temporal span to be considered
-	D['start_date'] = start_date; D['end_date'] = end_date
+	D['start_date'] = args.start_date; D['end_date'] = args.end_date
 	
 	#define whether predictive analytics are necessary
-	D['predict'] = predict
+	D['predict'] = args.predict
 	
 	if args.hour != '' and ":" in args.hour and len(args.hour) == 5: #if we are looking for a specific day/time pairing historically rather than a prediction based on current conditions
 		hour, minute = args.hour.split(":")
