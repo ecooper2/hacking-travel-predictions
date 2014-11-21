@@ -1,11 +1,15 @@
 # Run the Models
 FILENAME=`date +20%y_%m%d_%H%M`
+AWS_CONFIG_FILE="/home/andrew/.aws/config"
+AWS_CREDENTIAL_FILE="/home/andrew/.aws/credentials"
+PATH=$PATH:/usr/local/bin
 
-python ./BlueToadAnalysis.py today 'similar_dow.json' -w -t & > similar_dow_log.json
+# Run the Model
+python ./BlueToadAnalysis.py today 'similar_dow.json' -w -t & > similar_dow_log.json &
 if [[ $(date +%u) -gt 5 ]] ; then
-  python ./BlueToadAnalysis.py weekend 'similar_weekends.json' -w -t & > similar_weekends_log.json
+  python ./BlueToadAnalysis.py weekend 'similar_weekends.json' -w -t & > similar_weekends_log.json &
 else
-  python ./BlueToadAnalysis.py weekday 'similar_weekdays.json' -w -t & > similar_weekdays_log.json
+  python ./BlueToadAnalysis.py weekday 'similar_weekdays.json' -w -t & > similar_weekdays_log.json &
 fi
 wait
 echo "model runs complete"
