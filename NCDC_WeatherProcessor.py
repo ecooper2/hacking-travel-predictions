@@ -88,7 +88,7 @@ def RealTimeWeather(D, NOAADic, NOAA_df, pairs_conds):
 			closest_site = D['w_def']
 		index = list(NOAA_df.Location).index(closest_site)
 		radio_code = NOAA_df.Code[index] #four letter code used for weather website definition
-		pairs_conds[roadway][-1] = GetRealTimeFromSite(D['WeatherURL'], radio_code)	
+		pairs_conds[roadway][1] = GetRealTimeFromSite(D['WeatherURL'], radio_code)	
 	return pairs_conds	
 	
 def GetRealTimeFromSite(weather_url, radio_code):

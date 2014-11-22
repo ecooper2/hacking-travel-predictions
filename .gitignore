@@ -37,8 +37,14 @@ nosetests.xml
 
 # Stores the large blue toad analysis files in their zipped or unzipped forms
 scratch/
+update_2012to2014
+update_olddata
+# File to test the efficacy of the code
+CodeTest.bat
 
 # Random, unused code
 Graveyard.py
+ScratchPad.py
+
 # Stores various files created (if necessary) during runtime 
 update/

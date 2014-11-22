@@ -52,14 +52,14 @@ def GetCurrentInfo(massdot_current, DiurnalDic):
 	time_of_day_ind = int(NCDC.GetTimeFromDateTime(current_datetime, True) * 288)
 	
 	pair_cond_weather_dic = {}
-	for p, tt in zip(current_data.pairId, current_data.travelTime):
+	for p, tt, speed in zip(current_data.pairId, current_data.travelTime, current_data.speed):
 		#This automatically appends a ' ', indicating CLEAR weather...this must be altered
 		key = p + "_" + str(day_of_week) #the key to locate the diurnal cycle for this day...	
 		if key not in DiurnalDic.keys():
-			pair_cond_weather_dic[p] = [0, ' ']
+			pair_cond_weather_dic[p] = [0, ' ', speed]
 			print "Unable to locate key %s" % key
 		else:
-			pair_cond_weather_dic[p] = [float(tt) - DiurnalDic[p + "_" + str(day_of_week)][time_of_day_ind], ' ']
+			pair_cond_weather_dic[p] = [float(tt) - DiurnalDic[p + "_" + str(day_of_week)][time_of_day_ind], ' ', speed]
 	
 	return day_of_week, current_datetime, pair_cond_weather_dic
 	
