@@ -388,7 +388,7 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, LengthDic, day
 		current_datetime = current_datetime.replace(hour = h, minute = m, second = 0) #set this to the user-input start_time
 		UnNormDic['Start'] = current_datetime.isoformat()
 	for road in PredictionDic.keys(): #iterate over all pair_ids
-		min_time = MinimumDic[road + "_" + str(day_of_week)] #shortest historical travel time for a roadway
+		min_time = MinimumDic[road] #shortest historical travel time for a roadway
 		roadway_length = LengthDic[road] if road in LengthDic.keys() else 9999 #length of segment, in miles
 		UnNormDic[str(road)] = {}
 		std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_len)
@@ -468,21 +468,28 @@ def GetJSON(f_path, f_name):
 	json_data = open(os.path.join(f_path, f_name)).read()
 	return json.loads(json_data)
 
-def DefineMinimums(D, all_pair_ids, DiurnalDic):
+def DefineMinimums(D, all_pair_ids):
 	"""To avoid predictions of unrealistically high travel speeds, given a dictionary (D) of parameters,
 	and a list of (all_pair_ids), return the minimum recorded travel time from (DiurnalDic) 
 	for the given roadway as a limit on predictions."""
 	MinimumDic = {}
 	for a in all_pair_ids.pair_id:
 		print "Definining minimum travel times for roadway %d" % a
-		for day in [0,1,2,3,4,5,6]:
-			if (str(a) + "_" + str(day)) in DiurnalDic.keys():
-				MinimumDic[str(a) + "_" + str(day)] = np.min(DiurnalDic[str(a) + "_" + str(day)])
+		processed_file_path = os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" +
+							str(a) + "_" + "Cleaned_Normalized_Weather.csv")
+		if os.path.exists(processed_file_path):
+			site_df = pd.read_csv(processed_file_path)
+			min_time = np.min(site_df.travel_time)
+			if math.isnan(min_time):
+				MinimumDic[str(a)] = 0.001
 			else:
-				MinimumDic[str(a) + "_" + str(day)] = 0.001
+				MinimumDic[str(a)] = min_time
+		else:
+			MinimumDic[str(a)] = 0.001 #the flag for a missing minimum time (avoids division by 0)
 	with open(os.path.join(D['update_path'], 'MinimumPredictions.txt'), 'wb') as outfile:
 		json.dump(MinimumDic, outfile)
 	return MinimumDic
+
 
 def GetZip(url, f_type):
 	"""Download a file found at the (url) provided of (f_type) 'csv' or 'zip'."""
@@ -536,7 +543,7 @@ def HardCodedParameters():
 	#bt_proc can be "no_update" if we are not processing/normalizing...otherwise the whole process ensues
 	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
 	"time_range" : 10, #how far from the current time is considered 'similar'?
-	"max_speed" : 75, #what is the highest speed will allow ourselves to report?
+	"max_speed" : 85, #what is the highest speed will allow ourselves to report?
 	"weather_fac_dic" : {' ': 1, 'RA' : 3, 'FG' : 5, 'SN' : 10}, #how many more must we grab, by cond?
 	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
 										#along with the best and worst-case scenarios
@@ -617,7 +624,7 @@ def main(D, output_file_name, subset, time_of_day):
 		with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'wb') as outfile:
 			json.dump(DiurnalDic, outfile)
 	if not os.path.exists(os.path.join(D['update_path'], 'MinimumPredictions.txt')): #if we lack minimums for each site
-		MinimumDic = DefineMinimums(D, all_pair_ids, DiurnalDic)
+		MinimumDic = DefineMinimums(D, all_pair_ids)
 	else:
 		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
 	LengthDic = GetJSON(D['data_path'], "LengthDic.json") #gather lengths of each segment
