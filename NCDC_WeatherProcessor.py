@@ -1,5 +1,5 @@
-"""This module should read all relevant NCDC weather files for a given site (user-specified), 
-traversing the directory for those files and returning a single data-frame containing all 
+"""This module should read all relevant NCDC weather files for a given site (user-specified),
+traversing the directory for those files and returning a single data-frame containing all
 relevant months."""
 
 import sys
@@ -12,13 +12,13 @@ import urllib2 as url
 import BeautifulSoup as SOUP
 import json
 
-global days_in_months 
+global days_in_months
 global leaps
 days_in_months = np.cumsum([31,28,31,30,31,30,31,31,30,31,30,31]) #for date conversion
 leaps = [1900 + 4 * x for x in range(50)] #for leap year determination
 
 def GetTimeFromDateTime(now, time = True, d_i_m = days_in_months, ls = leaps):
-	"""Given a (now) from datetime.datetime.now, return the standard YYYYDOY.XXX 
+	"""Given a (now) from datetime.datetime.now, return the standard YYYYDOY.XXX
 	in five-minute fractions..."""
 	w_date = now.year * 10000 + now.month * 100 + now.day
 	w_time = now.hour * 100 + now.minute + float(now.second)/60
@@ -27,12 +27,12 @@ def GetTimeFromDateTime(now, time = True, d_i_m = days_in_months, ls = leaps):
 		return round(now_time - int(now_time),3)
 	else: #if we want the (YYYYDOY)
 		return int(now_time)
-		
+
 def GetRelevantFileList(site_name, weather_dir):
 	"""Given the (site_name) and the directory to search for files (weather_dir),
 	a relative path, return a list of all .txt files containing the site name"""
 	return [b for b in os.listdir(weather_dir) if '.txt' in b and site_name in b]
-	
+
 def GetNCDC_df(weather_dir, ncdc_file):
 	"""Given an NCDC file, open the text file, and return a dataframe"""
 	f = open(os.path.join(weather_dir, ncdc_file)).readlines()
@@ -46,7 +46,7 @@ def GetNCDC_df(weather_dir, ncdc_file):
 				NCDC_as_dic[c] = [] #empty list, to be appended with each line of data
 		elif lines_of_data and len(line) > 1: #if this is a line of data
 			split_line = line.strip().split(',')
-			for s,c in zip(split_line, column_list): 
+			for s,c in zip(split_line, column_list):
 				try: #if we can coerce the string to float
 					NCDC_as_dic[c].append(float(s))
 				except ValueError: #if we cannot, just append the string
@@ -61,9 +61,9 @@ def BuildSiteDataFrame(weather_dir, all_files):
 			site_df = GetNCDC_df(weather_dir, f)
 		else: #add this data frame to the previous one:
 			site_df = site_df.append(GetNCDC_df(weather_dir,f))
-			site_df.index = range(len(site_df)) #re-index 
+			site_df.index = range(len(site_df)) #re-index
 	return site_df
-	
+
 def GetType(w):
 	"""Return a mapped value for numerous types of weather to one heading.
 	More information found at: http://cdo.ncdc.noaa.gov/qclcd/qclcddocumentation.pdf."""
@@ -75,12 +75,12 @@ def GetType(w):
 		return 'FG'
 	else:
 		return ' ' #clear weather
-		
+
 def RealTimeWeather(D, NOAADic, NOAA_df, pairs_conds):
 	"""Given a dictionary describing which weather site should be used for each roadway (NOAADic), a dictionary of the
 	conditions at each pair (pairs_conds), and a third dictionary containing defaul parameters (D), return the generalized
 	weather conditions at each site."""
-	for roadway in pairs_conds.keys(): #each roadway	
+	for roadway in pairs_conds.keys(): #each roadway
 		if roadway in NOAADic.keys():
 			closest_site = NOAADic[roadway]
 			if closest_site == D['weather_site_default']: closest_site = D['w_def'] #convert to the site in NOAA_df
@@ -88,30 +88,30 @@ def RealTimeWeather(D, NOAADic, NOAA_df, pairs_conds):
 			closest_site = D['w_def']
 		index = list(NOAA_df.Location).index(closest_site)
 		radio_code = NOAA_df.Code[index] #four letter code used for weather website definition
-		pairs_conds[roadway][1] = GetRealTimeFromSite(D['WeatherURL'], radio_code)	
-	return pairs_conds	
-	
+		pairs_conds[roadway][1] = GetRealTimeFromSite(D['WeatherURL'], radio_code)
+	return pairs_conds
+
 def GetRealTimeFromSite(weather_url, radio_code):
 	"""Given a four-letter (radio_code) string for NOAA, return the current weather conditions as one of four classifications
 	from the site within the (weather_url) webspace."""
 	page = url.urlopen(weather_url + radio_code + ".rss")
 	parsed_page = SOUP.BeautifulSoup(page)
-	titles = parsed_page.findAll('title') #grab the bullet points from the key page	
+	titles = parsed_page.findAll('title') #grab the bullet points from the key page
 	weather_tag = titles[-1] #the last title should contain the weather
 	w = weather_tag.contents[0].strip() #contains "Partly Cloudy and 83 F at..."
 	if 'Snow' in w or 'Ice' in w or 'Freezing' in w: #this all becomes the "SNOW" heading
 		return 'SN'
 	elif 'Rain' in w or 'Thunderstorm' in w: #this all becomes the "RAIN/STORM" heading
-		return 'RA'
+		return 'SN'
 	elif 'Fog' in w or 'Haze' in w or 'Dust' in w or 'Funnel' in w or 'Tornado' in w: #fog, haze, mist, wind...
-		return 'FG'
+		return 'SN'
 	else:
-		return ' ' #clear weather
-		
+		return 'SN' #clear weather
+
 def RoundToNearestNth(val, N, dec):
 	"""Given a (val), round to the nearest (N)th fraction to (dec) decimal places,
 	for instance, 100.139 to the nearest 20th, to 3 places, is: 100.150."""
-	frac = int((val - int(val)) * N + 0.5) 
+	frac = int((val - int(val)) * N + 0.5)
 	return round(int(val) + float(frac)/N, dec)
 
 def ConvertWeatherDate(w_date, w_time, N, dec, d_i_m = days_in_months, ls = leaps):
@@ -135,7 +135,7 @@ def ShortestDist(LatLon_df, Lat, Lon):
 	of that data frame corresponding to the site closest to Lat,Lon."""
 	distances = [(Lat-x)**2 + (Lon-y)**2 for x,y in zip(LatLon_df.Lat, LatLon_df.Lon)]
 	return distances.index(np.min(distances))
-	
+
 def GetWSiteName(D, a, RoadwayCoordsDic):
 	"""For a given pair_id (a), with the relevant dictionary to store paths (D), either we already
 	know which site is closest - this could be a preprocessing step - or we need to search a database
@@ -163,12 +163,12 @@ def BuildClosestNOAADic(NOAA_df, pair_ids, D):
 	with open(os.path.join(D['update_path'], 'ClosestWeatherSite.txt'), 'wb') as outfile:
 		json.dump(NOAA_site_dic, outfile)
 	return NOAA_site_dic
-	
+
 def ChooseClosestSite(roadway, RoadwayCoords, NOAA_df, D):
-	"""Given a (roadway), a dictionary (RoadwayCoords) containing the lat/lon of roadways, a dictionary (D) containing the default 
+	"""Given a (roadway), a dictionary (RoadwayCoords) containing the lat/lon of roadways, a dictionary (D) containing the default
 	location to use if the roadway's coordinates are unknown, and a list of NOAA sites and their lat/lon coordinates (NOAA_duf)
 	return the closest site in terms of euclidian distance."""
-	if str(roadway) not in RoadwayCoords.keys(): #if this roadway does not contain coordinates for use, return the default site	
+	if str(roadway) not in RoadwayCoords.keys(): #if this roadway does not contain coordinates for use, return the default site
 		return D['weather_site_default']
 	else:
 		road_lat, road_lon = RoadwayCoords[str(roadway)]['Lat'], RoadwayCoords[str(roadway)]['Lon']
@@ -178,8 +178,8 @@ def ChooseClosestSite(roadway, RoadwayCoords, NOAA_df, D):
 		if euclidian_dist < min_dist: #if this is the closest site we've seen
 			min_dist = euclidian_dist; closest_site = site
 	return closest_site
-	
-			
+
+
 def GetWeatherData(weather_dir, site_name):
 	"""Given the (site_name) of the relevant weather site ("BostonAirport", e.g.), and the
 	(weather_dir) in which they are found, return the full data frame."""
@@ -189,7 +189,7 @@ def GetWeatherData(weather_dir, site_name):
 		file_list = GetRelevantFileList(site_name, weather_dir)
 		full_site = BuildSiteDataFrame(weather_dir, file_list)
 		full_site.to_csv(os.path.join(weather_dir, site_name + "_NCDC.csv"), index = False)
-	
+
 if __name__ == "__main__":
 	script_name, site_name = sys.argv
 	D = BTA.HardCodedParameters()
