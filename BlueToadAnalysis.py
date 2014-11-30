@@ -544,7 +544,7 @@ def HardCodedParameters():
 	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
 	"time_range" : 10, #how far from the current time is considered 'similar'?
 	"max_speed" : 85, #what is the highest speed will allow ourselves to report?
-	"weather_fac_dic" : {' ': 1, 'RA' : 3, 'FG' : 5, 'SN' : 10}, #how many more must we grab, by cond?
+	"weather_fac_dic" : {' ': 1, 'RA' : 3, 'FG' : 5, 'SN' : 30}, #how many more must we grab, by cond?
 	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
 										#along with the best and worst-case scenarios
 	"path_to_lat_lons" : "https://github.com/apcollier/hacking-travel/blob/master/js/segments.js",
