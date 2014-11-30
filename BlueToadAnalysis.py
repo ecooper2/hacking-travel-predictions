@@ -654,7 +654,24 @@ if __name__ == "__main__":
 	#'W' - weather, 'T' - traffic conditions, 'D' - day of week, 'S' - Sat/Sun vs. Mon-Fri.  The options
 	#are invoked by including the letters in the input string, subset.  For example.  Using 'TD' as the
 	#string will choose examples based on traffic and the day of week, but not weather...
-	D = HardCodedParameters()
+	D = {"pred_duration" : 288, #hours of prediction
+	'steps_to_smooth': 12, #how long until our prediction fully reflects future estimates
+	"window" : 12, #how many five-minute interval defines a suitable moving-average window
+	"day_dict" : {'monday' : 0, 'tuesday' : 1, 'wednesday' : 2, 'thursday' : 3, 'friday' : 4, 
+				  'saturday' : 5, 'sunday' : 6},
+	#bt_proc can be "no_update" if we are not processing/normalizing...otherwise the whole process ensues
+	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
+	"time_range" : 10, #how far from the current time is considered 'similar'?
+	"max_speed" : 85, #what is the highest speed will allow ourselves to report?
+	"weather_fac_dic" : {' ': 1, 'RA' : 3, 'FG' : 10, 'SN' : 30}, #how many more must we grab, by cond?
+	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
+										#along with the best and worst-case scenarios
+	}
+	environment_vars = GetJSON("","config.json")
+	for key in environment_vars:
+		D[key] = environment_vars[key] #add environmental variables to the larger dictionary
+	D["weather_dir"] = os.path.join(D['data_path'], "NCDC_Weather")
+
 	parser = argparse.ArgumentParser()
 	parser.add_argument("day", choices=['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
 						'today', 'weekday', 'weekend'], help = "day of week option, must be a lowercase day of the week, 'today', 'weekday', or 'weekend'")						
