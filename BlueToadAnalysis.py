@@ -264,6 +264,7 @@ def AdjustDayOfWeek(current_day, new_day, day_of_week):
 def	AddEmptyDic(a, pcts, PredictionDic):
 	"""For a given roadway (a), a list of percentages to consider (pcts), and a (PredictionDic),
 	fill each index with empty lists..."""
+	print "Insufficient data for site %d" % a
 	for p in pcts:				#we cannot expand the dataset...and so we should return an empty list.
 		PredictionDic[str(a)][str(p)] = []
 	return PredictionDic	
@@ -321,21 +322,14 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			if ('Y' in subset or 'S' in subset) and PredictionDic[str(a)] == {}: #if we need to choose only certain days of the week
 				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
-				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
-					time_range = time_range * 1.5
-					day_sub_bt = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
-							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
+				if len(day_sub_bt) < 5: #if our similarity requirements are too stringent
+					PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
 			elif ('0' in subset or '1' in subset or '2' in subset or '3' in subset 
 				  or '4' in subset or '5' in subset or '6' in subset) and PredictionDic[str(a)] == {}: #it's a specific day-of-week
 				day_sub_bt = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))				  
-				while len(day_sub_bt) < 5: #if our similarity requirements are too stringent
-					time_range = time_range * 1.5
-					day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
-							  time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))
-					if time_of_day != '' and len(day_sub_bt) < 5: #in this case, if the sample size is too small, with time_range set to 0, 
-						PredictionDic = AddEmptyDic(a, pcts, PredictionDic)	
-						break #exit the while loop
+				if len(day_sub_bt) < 5: #if our similarity requirements are too stringent
+					PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
 			else:
 				day_sub_bt = traffic_sub_bt
 			if len(day_sub_bt) > 0: 
@@ -356,14 +350,20 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			else:
 				print "no predictions generated for %d" % a
 		else: #use default...essentially dead-average conditions, flagged as -0.00001 rather than zero
-			print "No current information available for site %d, using default." % a
-			pred_list = [-0.00001 for i in range(D['pred_duration'])]
-			for p in pcts: #NOTE, WITHOUT CURRENT INFO, ALL PERCENTILES WILL BE THE SAME (DEFAULT)
-				PredictionDic[str(a)][str(p)] = pred_list
+			PredictionDic = DefaultPredictions(a, D, pcts, PredictionDic)
 	#with open(os.path.join(bt_path, 'CurrentPredictions.txt'), 'wb') as outfile:
 	#	json.dump(PredictionDic, outfile)
 	return PredictionDic
 
+def DefaultPredictions(a, D, pcts, PredictionDic):
+	"""For a given roadway (a) and parameter dictionary (D), update all percentiles (pct) in (PredictionDict)
+	with default predictions."""
+	print "No current information available for site %d, using default." % a
+	pred_list = [-0.00001 for i in range(D['pred_duration'])]
+	for p in pcts: #NOTE, WITHOUT CURRENT INFO, ALL PERCENTILES WILL BE THE SAME (DEFAULT)
+		PredictionDic[str(a)][str(p)] = pred_list
+	return PredictionDic
+	
 def RoundToFive(current_datetime):
 	"""Rounds a (current_datetime) to the nearest multiple of 5."""
 	minute = current_datetime.minute; second = current_datetime.second
