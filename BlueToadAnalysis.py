@@ -167,25 +167,31 @@ def AttachWeatherData(bt, bt_path, bt_name, w_dir, w_site_name):
 
 def AttachTrafficHistory(sub_bt, bt_path, bt_name, D, weights):	
 	traffic_history = []; historical_window = D['traffic_system_memory']
-	print "Appending traffic history for site %d" % int(sub_bt.pair_id[0:1])
-	for i in range(len(sub_bt)):
-		if i == 0:
-			traffic_history.append(0)
-		else:
-			traffic_history.append(CalculateAntecedentTraffic(sub_bt.Normalized_t[max(0,i-historical_window):i][::-1], weights[0:historical_window], historical_window))
-	sub_bt['norm_traffic_hist'] = traffic_history
+	if len(sub_bt) > 0:
+		print "Appending traffic history for site %d" % int(sub_bt.pair_id[0:1])
+		for i in range(len(sub_bt)):
+			if i == 0:
+				traffic_history.append(0)
+			else:
+				traffic_history.append(CalculateAntecedentTraffic(sub_bt.Normalized_t[max(0,i-historical_window):i][::-1], weights[0:historical_window], historical_window))
+		sub_bt['norm_traffic_hist'] = traffic_history
+	else:
+		sub_bt['norm_traffic_hist'] = []
 	sub_bt.to_csv(os.path.join(bt_path, bt_name + "_CNW_TrafficHist.csv"), index = False)
 	return sub_bt
 			
 def AttachWeatherHistory(sub_bt, bt_path, bt_name, D, weights):
 	weather_history = []; historical_window = D['traffic_system_memory']
-	print "Appending weather history for site %d" % int(sub_bt.pair_id[0:1])
-	for i in range(len(sub_bt)):
-		if i == 0:
-			weather_history.append(0)
-		else:
-			weather_history.append(CalculateAntecedentWeather(sub_bt.weather[max(0,i-historical_window):i][::-1],weights[0:historical_window],D['weather_cost_facs'], historical_window))
-	sub_bt['weather_hist'] = weather_history
+	if len(sub_bt) > 0:
+		print "Appending weather history for site %d" % int(sub_bt.pair_id[0:1])
+		for i in range(len(sub_bt)):
+			if i == 0:
+				weather_history.append(0)
+			else:
+				weather_history.append(CalculateAntecedentWeather(sub_bt.weather[max(0,i-historical_window):i][::-1],weights[0:historical_window],D['weather_cost_facs'], historical_window))
+		sub_bt['weather_hist'] = weather_history
+	else:
+		sub_bt['weather_hist'] = []
 	sub_bt.to_csv(os.path.join(bt_path, bt_name + '_CNW_TrafficHist_WeatherHist.csv'), index = False)
 	return sub_bt
 
