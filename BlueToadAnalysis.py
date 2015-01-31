@@ -165,6 +165,47 @@ def AttachWeatherData(bt, bt_path, bt_name, w_dir, w_site_name):
 	bt.to_csv(os.path.join(bt_path, bt_name + "_Cleaned" + "_Normalized" + "_Weather.csv"), index = False)
 	return bt
 
+def AttachTrafficHistory(sub_bt, bt_path, bt_name, D, weights):	
+	traffic_history = []; historical_window = D['traffic_system_memory']
+	print "Appending traffic history for site %d" % int(sub_bt.pair_id[0:1])
+	for i in range(len(sub_bt)):
+		if i == 0:
+			traffic_history.append(0)
+		else:
+			traffic_history.append(CalculateAntecedentTraffic(sub_bt.Normalized_t[max(0,i-historical_window):i][::-1], weights[0:historical_window], historical_window))
+	sub_bt['norm_traffic_hist'] = traffic_history
+	sub_bt.to_csv(os.path.join(bt_path, bt_name + "_CNW_TrafficHist.csv"), index = False)
+	return sub_bt
+			
+def AttachWeatherHistory(sub_bt, bt_path, bt_name, D, weights):
+	weather_history = []; historical_window = D['traffic_system_memory']
+	print "Appending weather history for site %d" % int(sub_bt.pair_id[0:1])
+	for i in range(len(sub_bt)):
+		if i == 0:
+			weather_history.append(0)
+		else:
+			weather_history.append(CalculateAntecedentWeather(sub_bt.weather[max(0,i-historical_window):i][::-1],weights[0:historical_window],D['weather_cost_facs'], historical_window))
+	sub_bt['weather_hist'] = weather_history
+	sub_bt.to_csv(os.path.join(bt_path, bt_name + '_CNW_TrafficHist_WeatherHist.csv'), index = False)
+	return sub_bt
+
+def CalculateAntecedentWeather(weather_history, weights, weather_cost_facs, historical_window):
+	if len(weather_history) == historical_window:
+		return np.sum([weather_cost_facs[weather]*w for weather,w in zip(weather_history, weights)])
+	else:
+		normalized_weights = NormalizeWeights(weights[0:len(weather_history)], np.sum(weights))
+		return np.sum([weather_cost_facs[weather]*w for weather,w in zip(weather_history, normalized_weights)])		
+
+def CalculateAntecedentTraffic(norm_traffic_history, weights, historical_window):
+	if len(norm_traffic_history) == historical_window:
+		return np.sum([norm_traffic * weight for norm_traffic, weight in zip(norm_traffic_history, weights)])
+	else: 
+		normalized_weights = NormalizeWeights(weights[0:len(norm_traffic_history)], np.sum(weights))
+		return np.sum([norm_traffic * weight for norm_traffic, weight in zip(norm_traffic_history, normalized_weights)])
+	
+def NormalizeWeights(weights, norm_sum):
+	return [float(w)/norm_sum for w in weights]
+	
 def GetAcceptableTimeRanges(time_range):
 	"""Given a (time_range) in minutes, determine the appropriate five minute intervals
 	peripheral to the key time that are acceptable for similar pairing.  For instance, if
@@ -591,6 +632,7 @@ def main(D, output_file_name, subset, time_of_day):
 	"""Main module"""
 	NOAA_df = PrePrep(D) #create directories and/or download bluetoad data if required.
 	data.GetBlueToad(D, D['bt_name']) #read it in and re-format dates
+	weights = list(pd.read_csv(os.path.join(D['data_path'],'DecaySeries.csv')).Weight)
 	all_pair_ids = pd.read_csv(os.path.join(D['data_path'], "all_pair_ids.csv"))
 	if not os.path.exists(os.path.join(D['update_path'], 'DiurnalDictionary.txt')): #if this dictionary doesn't exist, we'll fill it
 		DiurnalDic = {} #To be appended, site by site
@@ -619,6 +661,13 @@ def main(D, output_file_name, subset, time_of_day):
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv")):
 			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
 			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D['weather_dir'], D["weather_site_default"])
+		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_CNW_TrafficHist.csv")):
+			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv"))		
+			sub_bt = AttachTrafficHistory(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D, weights)
+		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_CNW_TrafficHist_WeatherHist.csv")):
+			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_CNW_TrafficHist.csv"))
+			sub_bt = AttachWeatherHistory(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D, weights)	
+	
 	#Write full DiurnalDictionary to a .txt file as a .json
 	if DD_flag:
 		with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'wb') as outfile:
@@ -666,6 +715,8 @@ if __name__ == "__main__":
 	"weather_fac_dic" : {' ': 1, 'RA' : 3, 'FG' : 10, 'SN' : 30}, #how many more must we grab, by cond?
 	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
 										#along with the best and worst-case scenarios
+	"traffic_system_memory" : 72, #number of 5-min-steps to consider for weather conditions/traffic conditions
+	"weather_cost_facs" : {"SN" : 3, "RA" : 1, "FG" : 1, " " : 0}
 	}
 	environment_vars = GetJSON("","config.json")
 	for key in environment_vars:
