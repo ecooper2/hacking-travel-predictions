@@ -349,7 +349,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 		PredictionDic[str(a)] = {}
 		if str(a) in ps_and_cs.keys(): #if we have access to current conditions at this locations
 			sub_bt = pd.read_csv(os.path.join(bt_path, "IndividualFiles", bt_name + "_" + str(a) +
-								"_" + "Cleaned_Normalized_Weather.csv")).fillna(' ')
+								"_" + "CNW_TrafficHist_WeatherHist.csv")).fillna(' ')
 			sub_bt = sub_bt[np.logical_and(sub_bt.insert_time >= start_date, sub_bt.insert_time <= end_date)]
 			L = len(sub_bt) #how many examples, and more importantly, when does this end...
 			sub_bt.index = range(L) #re-index, starting from zero
@@ -686,7 +686,7 @@ def main(D, output_file_name, subset, time_of_day):
 	if D['predict'] != 0: #if we are generating forward predictions 
 		day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
 		if time_of_day == "": #if we are interested in predictions based on current conditions
-			pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions)
+			pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions, weights)
 		else: #zero-out the normalized conditions, historical analysis starts from a normalized baseline of zero (typical conditions)
 			if subset[-1] in ['0','1','2','3','4','5','6']: #if there is a prescribed day_of_week...
 				day_of_week = int(subset[-1]) #force day_of_week to chosen day rather than current day
@@ -722,6 +722,8 @@ if __name__ == "__main__":
 	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
 										#along with the best and worst-case scenarios
 	"traffic_system_memory" : 72, #number of 5-min-steps to consider for weather conditions/traffic conditions
+	"traffic_similarity_pct" : 0.2, #how similar must historical traffic be? (0.1 means we located the 10% most similar)
+	"weather_similarity_pct" : 0.2, #how similar must historical weather be?
 	"weather_cost_facs" : {"SN" : 3, "RA" : 1, "FG" : 1, " " : 0}
 	}
 	environment_vars = GetJSON("","config.json")

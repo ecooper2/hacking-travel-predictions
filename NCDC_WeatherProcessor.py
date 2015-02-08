@@ -11,6 +11,7 @@ import math
 import urllib2 as url
 import BeautifulSoup as SOUP
 import json
+import datetime as dt
 
 global days_in_months 
 global leaps
@@ -75,21 +76,96 @@ def GetType(w):
 		return 'FG'
 	else:
 		return ' ' #clear weather
-		
-def RealTimeWeather(D, NOAADic, NOAA_df, pairs_conds):
+	
+def GetClosestSite(NOAADic, roadway, weather_site_default, w_def):
+	if roadway in NOAADic.keys():
+		closest_site = NOAADic[roadway]
+		if closest_site == weather_site_default: closest_site = w_def #convert to the site in NOAA_df
+	else: #if our dictionary does not contain the closest site to...
+		closest_site = w_def
+	return closest_site
+	
+def RealTimeWeather(D, NOAADic, NOAA_df, pairs_conds, weights):
 	"""Given a dictionary describing which weather site should be used for each roadway (NOAADic), a dictionary of the
 	conditions at each pair (pairs_conds), and a third dictionary containing defaul parameters (D), return the generalized
 	weather conditions at each site."""
-	for roadway in pairs_conds.keys(): #each roadway	
-		if roadway in NOAADic.keys():
-			closest_site = NOAADic[roadway]
-			if closest_site == D['weather_site_default']: closest_site = D['w_def'] #convert to the site in NOAA_df
-		else: #if our dictionary does not contain the closest site to...
-			closest_site = D['w_def']
+	for roadway in pairs_conds.keys(): #each roadway
+		print "Gathering last %d hours of weather information for roadway %s" % (D['traffic_system_memory']/12, roadway)
+		closest_site = GetClosestSite(NOAADic, roadway, D['weather_site_default'], D['w_def'])
 		index = list(NOAA_df.Location).index(closest_site)
 		radio_code = NOAA_df.Code[index] #four letter code used for weather website definition
-		pairs_conds[roadway][1] = GetRealTimeFromSite(D['WeatherURL'], radio_code)	
+		pairs_conds[roadway][1] = GetHistoricalFromSite(D['WeatherURL_historical'], radio_code, D['traffic_system_memory'], 
+								  D['weather_cost_facs'], weights)	
 	return pairs_conds	
+		
+def GetHistoricalFromSite(weather_url, radio_code, steps_back, weather_cost_facs, weights):
+	page = url.urlopen(weather_url + radio_code + ".html")
+	parsed_page = SOUP.BeautifulSoup(page)
+	table_data = parsed_page.findAll('td')
+	days, times, conditions = GetDaysTimesAndConditions(table_data)
+	steps_to_most_recent = Get5MinStepsToPreviousTimes(days, times, steps_back)
+	prior_weather_conditions = GenerateWeatherSequence(conditions, steps_to_most_recent, steps_back)
+	return BTA.CalculateAntecedentWeather(prior_weather_conditions, weights, weather_cost_facs, steps_back)
+	
+def GenerateWeatherSequence(conditions, historical_changeovers, steps_back):
+	condition_list = []
+	for i in range(steps_back):
+		if i <= historical_changeovers[0]:
+			condition_list.append(conditions[0])
+		else:
+			condition_list.append(conditions[GetClosestInList(i, historical_changeovers)])
+	return condition_list
+	
+def GetClosestInList(val, numerical_list):
+	for index, item in enumerate(numerical_list):
+		if val < item:
+			if abs(val-numerical_list[index]) < abs(numerical_list[index-1]-val): 
+				return index
+			else:
+				return index-1
+	
+def Get5MinStepsToPreviousTimes(days, times, steps_back):
+	steps_away_historically = []
+	for d, t in zip(days, times):
+		steps_away_historically.append(Get5MinStepsToMostRecentTime(d,t))
+		if steps_away_historically[-1] > steps_back: return steps_away_historically
+	return steps_away_historically
+		
+def	Get5MinStepsToMostRecentTime(NOAA_day, NOAA_clocktime):
+	current_time = dt.datetime.now()
+	NOAA_hour, NOAA_minute = [int(t) for t in NOAA_clocktime.split(':')]
+	most_recent_NOAA_time = dt.datetime(year = current_time.year, month = current_time.month, day = NOAA_day, 
+										hour = NOAA_hour, minute = NOAA_minute)
+	if most_recent_NOAA_time.day > current_time.day: 
+		if most_recent_NOAA_time.month == 1:
+			most_recent_NOAA_time = dt.datetime(year = current_time.year, month = 12, day = NOAA_day, hour = NOAA_hour, minute = NOAA_minute)
+		else:
+			most_recent_NOAA_time = dt.datetime(year = current_time.year, month = 1, day = NOAA_day, hour = NOAA_hour, minute = NOAA_minute)
+	return (current_time - most_recent_NOAA_time).seconds/300
+	
+def GetDaysTimesAndConditions(td):
+	date_value_flag, weather_flag = True, True #are we expecting the next integral value we see to be a date?  Do we have weather info yet?
+	days, times, conditions = [], [], []
+	first_valid_td_index = GetFirstValid_td_index(td)
+	date_time_condition_indices = [(8 + i*18, 9 + i*18, 12 + i*18) for i in range(len(td)/18 - 1)] 
+	for d,t,c in date_time_condition_indices:
+		days.append(int(td[d].text))
+		times.append(td[t].text)
+		if ('Snow' in td[c].text or 'Ice' in td[c].text or 'Freezing' in td[c].text): #this all becomes the "SNOW" heading
+			conditions.append('SN')
+		elif ('Rain' in td[c].text or 'Thunderstorm' in td[c].text): #this all becomes the "RAIN/STORM" heading
+			conditions.append('RA')
+		elif ('Fog' in td[c].text or 'Haze' in td[c].text or 'Dust' in td[c].text or 'Funnel' in td[c].text or 'Tornado' in td[c].text):
+			conditions.append('FG')
+		elif ('Fair' in td[c].text or 'Few' in td[c].text or 'Cloud' in td[c].text or 'Unknown' 
+			   in td[c].text or 'cast' in td[c].text or 'NA' in td[c].text):
+			conditions.append(' ')
+	return days, times, conditions		
+		
+def GetFirstValid_td_index(table_data): 
+	for i,td in enumerate(table_data):
+		if len(td.text) == 2:
+			return i
 	
 def GetRealTimeFromSite(weather_url, radio_code):
 	"""Given a four-letter (radio_code) string for NOAA, return the current weather conditions as one of four classifications
