@@ -339,11 +339,14 @@ def NoPrediction(all_pair_ids, D, LengthDic):
 	return ReportDictionary	
 	
 def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_of_week, current_datetime, pct_range, 
-								  time_range, bt_path, bt_name, pcts, subset, pred_len, time_of_day,
+								  time_range, bt_path, bt_name, pcts, subset, pred_len, time_of_day, weather_kernel_pct,
 								  start_date, end_date):
 	"""Iterate over all pair_ids and determine similar matches in terms of time_of_day,
 	weather, traffic, and day_of_week...and generate 288 five-minute predictions (a
 	24-hour prediction in 5-minute intervals)"""
+	
+	weather_severity_fac, min_matches, min_weather_kernel_size, min_traffic_bt_size = 2.5, 5, 2, 150 #change if needed
+	
 	PredictionDic = {}
 	for a in all_pair_ids.pair_id: #iterate over each pair_id and generate a string of predictions
 		PredictionDic[str(a)] = {}
@@ -354,7 +357,9 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			L = len(sub_bt) #how many examples, and more importantly, when does this end...
 			sub_bt.index = range(L) #re-index, starting from zero
 			if 'W' in subset:
-				weather_sub_bt = sub_bt[sub_bt.weather == ps_and_cs[str(a)][1]] #just similar weather
+				weather_kernel_size = max(ps_and_cs[str(a)][1] * weather_kernel_pct, min_weather_kernel_size)
+				weather_sub_bt = sub_bt[np.logical_and(sub_bt.weather_hist <= ps_and_cs[str(a)][1] + weather_kernel_size,
+													   sub_bt.weather_hist >= ps_and_cs[str(a)][1] - weather_kernel_size)]
 			else:
 				weather_sub_bt = sub_bt
 			L_w = len(weather_sub_bt)
@@ -363,23 +368,31 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 				PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
 			if 'T' in subset and PredictionDic[str(a)] == {}:
 				traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range, L_w)
+				if len(traffic_sub_bt) < min_traffic_bt_size:
+					traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range * 2, L_w)
 			else:
 				traffic_sub_bt = weather_sub_bt
 			#locate similar days/times, more lax search in less common weather
 			if ('Y' in subset or 'S' in subset) and PredictionDic[str(a)] == {}: #if we need to choose only certain days of the week
 				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
-								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week)
-				if len(day_sub_bt) < 5: #if our similarity requirements are too stringent
-					PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
+								time_range * max(int(ps_and_cs[str(a)][1]/weather_severity_fac),1), day_of_week)
+				if len(day_sub_bt) < min_matches: #if our similarity requirements are too stringent
+					day_sub_bt = RelaxRequirements_GetMatches(traffic_sub_bt, current_datetime, subset, time_of_day, time_range, 
+								ps_and_cs, a, weather_severity_fac, day_of_week, min_matches)
+					if len(day_sub_bt) < min_matches:
+						PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
 			elif ('0' in subset or '1' in subset or '2' in subset or '3' in subset 
 				  or '4' in subset or '5' in subset or '6' in subset) and PredictionDic[str(a)] == {}: #it's a specific day-of-week
 				day_sub_bt = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
-								time_range * weather_fac_dic[ps_and_cs[str(a)][1]], day_of_week, int(subset[-1]))				  
-				if len(day_sub_bt) < 5: #if our similarity requirements are too stringent
-					PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
+								time_range * max(int(ps_and_cs[str(a)][1]/weather_severity_fac),1), day_of_week, int(subset[-1]))
+				if len(day_sub_bt) < min_matches: #if our similarity requirements are too stringent
+					day_sub_bt = RelaxRequirements_GetMatches(traffic_sub_bt, current_datetime, subset, time_of_day, time_range, 
+								ps_and_cs, a, weather_severity_fac, day_of_week, min_matches)
+					if len(day_sub_bt) < min_matches:
+						PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
 			else:
 				day_sub_bt = traffic_sub_bt
-			if len(day_sub_bt) > 0: 
+			if len(day_sub_bt) > min_matches: 
 				for p in pcts:
 					PredictionDic[str(a)][str(p)] = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
 								  #######Generate Predictions#####
@@ -402,6 +415,35 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 	#	json.dump(PredictionDic, outfile)
 	return PredictionDic
 
+def RelaxRequirements_GetMatches(traffic_sub_bt, current_datetime, subset, time_of_day, time_range, 
+								ps_and_cs, a, weather_severity_fac, day_of_week, min_matches):	
+	###Step 1: convert from a specific day 'e.g. Tuesday' to a more general classification 'e.g. weekday'
+	if subset[-1] in ['5','6']:
+		subset = subset.replace('O','S')
+	elif subset[-1] in ['0','1','2','3','4','5']:
+		subset = subset.replace('O','Y')
+	matches = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
+								time_range * max(int(ps_and_cs[str(a)][1]/weather_severity_fac),1), day_of_week)
+	if len(matches) > min_matches:
+		return matches
+	else:
+		###Step 2: flex the temporal requirements so twice as many matches are plausible.
+		matches = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
+								time_range * 2 * max(int(ps_and_cs[str(a)][1]/weather_severity_fac),1), day_of_week)
+		if len(matches) > min_matches:
+			return matches
+		else:
+			###Step 3: flex the temporal requirements to once again double matches...
+			matches = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
+						time_range * 4 * max(int(ps_and_cs[str(a)][1]/weather_severity_fac),1), day_of_week)
+			if len(matches) > min_matches:
+				return matches
+			else:
+				###Step 4: flex the requirements by a factor of two once more
+				matches = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
+						time_range * 8 * max(int(ps_and_cs[str(a)][1]/weather_severity_fac),1), day_of_week)
+				return matches
+	
 def DefaultPredictions(a, D, pcts, PredictionDic):
 	"""For a given roadway (a) and parameter dictionary (D), update all percentiles (pct) in (PredictionDict)
 	with default predictions."""
@@ -629,7 +671,7 @@ def PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
 									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, 
-									D['pred_duration'], time_of_day, D['start_date'], D['end_date'])
+									D['pred_duration'], time_of_day, D['weather_kernel_pct'], D['start_date'], D['end_date'])
 	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, LengthDic, day_of_week, 
 					current_datetime, D['pred_duration'], time_of_day, D['max_speed'], pairs_and_conditions, D['steps_to_smooth'])
 	return CurrentPredDic
@@ -723,7 +765,7 @@ if __name__ == "__main__":
 										#along with the best and worst-case scenarios
 	"traffic_system_memory" : 72, #number of 5-min-steps to consider for weather conditions/traffic conditions
 	"traffic_similarity_pct" : 0.2, #how similar must historical traffic be? (0.1 means we located the 10% most similar)
-	"weather_similarity_pct" : 0.2, #how similar must historical weather be?
+	"weather_kernel_pct" : 0.3, #how similar must historical weather be?
 	"weather_cost_facs" : {"SN" : 3, "RA" : 1, "FG" : 1, " " : 0}
 	}
 	environment_vars = GetJSON("","config.json")
