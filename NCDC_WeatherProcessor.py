@@ -89,23 +89,27 @@ def RealTimeWeather(D, NOAADic, NOAA_df, pairs_conds, weights):
 	"""Given a dictionary describing which weather site should be used for each roadway (NOAADic), a dictionary of the
 	conditions at each pair (pairs_conds), and a third dictionary containing defaul parameters (D), return the generalized
 	weather conditions at each site."""
+	NOAA_site_conditions = {}
 	for roadway in pairs_conds.keys(): #each roadway
 		print "Gathering last %d hours of weather information for roadway %s" % (D['traffic_system_memory']/12, roadway)
 		closest_site = GetClosestSite(NOAADic, roadway, D['weather_site_default'], D['w_def'])
 		index = list(NOAA_df.Location).index(closest_site)
 		radio_code = NOAA_df.Code[index] #four letter code used for weather website definition
-		pairs_conds[roadway][1] = GetHistoricalFromSite(D['WeatherURL_historical'], radio_code, D['traffic_system_memory'], 
-								  D['weather_cost_facs'], weights)	
+		if radio_code not in NOAA_site_conditions.keys():
+			NOAA_site_conditions = GetHistoricalFromSite(D['WeatherURL_historical'], radio_code, 
+										D['traffic_system_memory'], D['weather_cost_facs'], weights, NOAA_site_conditions)
+		pairs_conds[roadway][1] = NOAA_site_conditions[radio_code]
 	return pairs_conds	
 		
-def GetHistoricalFromSite(weather_url, radio_code, steps_back, weather_cost_facs, weights):
+def GetHistoricalFromSite(weather_url, radio_code, steps_back, weather_cost_facs, weights, NOAA_site_conditions):
 	page = url.urlopen(weather_url + radio_code + ".html")
 	parsed_page = SOUP.BeautifulSoup(page)
 	table_data = parsed_page.findAll('td')
 	days, times, conditions = GetDaysTimesAndConditions(table_data)
 	steps_to_most_recent = Get5MinStepsToPreviousTimes(days, times, steps_back)
 	prior_weather_conditions = GenerateWeatherSequence(conditions, steps_to_most_recent, steps_back)
-	return BTA.CalculateAntecedentWeather(prior_weather_conditions, weights, weather_cost_facs, steps_back)
+	NOAA_site_conditions[radio_code] = BTA.CalculateAntecedentWeather(prior_weather_conditions, weights, weather_cost_facs, steps_back)
+	return NOAA_site_conditions
 	
 def GenerateWeatherSequence(conditions, historical_changeovers, steps_back):
 	condition_list = []
