@@ -11,7 +11,9 @@ import datetime as dt
 import numpy as np
 import os
 import datetime
-
+import gzip
+from StringIO import StringIO
+ 
 def ParseJson(current_transit_dict):
 	"""Given a json taken from mass-dot's real-time feed (current_transit_dict), 
 	return the real-time string and an appropriate data-frame with current information"""
@@ -43,10 +45,13 @@ def GetCurrentInfo(massdot_current, DiurnalDic):
 	to NOAA/NCDC.  This is probably above my pay-grade, but I can dig into it.  The second is
 	a normalized estimate of traffic conditions.  The third is the day of the week, the fourth
 	is the time of day..."""
-	req = url.Request(massdot_current)
-	opener = url.build_opener()
-	f = opener.open(req)
-	current_time, current_data = ParseJson(json.load(f))
+        request = url.Request(massdot_current)
+        request.add_header('Accept-encoding', 'gzip')	
+	response = url.urlopen(request)
+        if response.info().get('Content-Encoding') == 'gzip':
+          buf = StringIO( response.read())
+          f = gzip.GzipFile(fileobj=buf)
+        current_time, current_data = ParseJson(json.load(f))
 	current_datetime = ConvertCurrentTimeToDatetime(current_time) #turn current.json string to datetime
 	day_of_week = BTA.GetDayOfWeek(int(NCDC.GetTimeFromDateTime(current_datetime, False)))
 	time_of_day_ind = int(NCDC.GetTimeFromDateTime(current_datetime, True) * 288)
