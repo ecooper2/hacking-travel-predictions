@@ -94,7 +94,7 @@ def GenerateDiurnalDic(bt, blue_toad_path, five_minute_fractions, window = 12):
 		for day in xrange(7): #over all days_of_the_week
 			print "Building diurnal cycle for roadway %d on day %d (Monday = 0, Sunday = 6)" % (u,day)
 			sub_bt = GetSubBlueToad(bt, u, day)
-			DiurnalDic[str(u) + "_" + str(day)] = DefineDiurnalCycle(sub_bt, day, five_minute_fractions, 
+			DiurnalDic[str(u) + "_" + str(day)] = DefineDiurnalCycle(sub_bt, day, five_minute_fractions,
 														window, np.mean(bt.speed)) #default to mean
 	return DiurnalDic
 
@@ -103,7 +103,7 @@ def NormalizeTravelTime(bt, DiurnalDic, blue_toad_path, blue_toad_name):
 	the difference between the expected travel time from (DiurnalDic) and the actual
 	time reported by travel time. (actual - theoretical)"""
 	normalized_times = []
-	if len(bt) > 0: 
+	if len(bt) > 0:
 		print "Now normalizing site %d" % int(bt.pair_id[0:1])
 		for p, d, i, t in zip(bt.pair_id, bt.day_of_week, bt.insert_time, bt.speed):
 			diurnal_key = str(p) + "_" + str(d) #to find the correct key of the dictionary
@@ -165,7 +165,7 @@ def AttachWeatherData(bt, bt_path, bt_name, w_dir, w_site_name):
 	bt.to_csv(os.path.join(bt_path, bt_name + "_Cleaned" + "_Normalized" + "_Weather.csv"), index = False)
 	return bt
 
-def AttachTrafficHistory(sub_bt, bt_path, bt_name, D, weights):	
+def AttachTrafficHistory(sub_bt, bt_path, bt_name, D, weights):
 	traffic_history = []; historical_window = D['traffic_system_memory']
 	if len(sub_bt) > 0:
 		print "Appending traffic history for site %d" % int(sub_bt.pair_id[0:1])
@@ -179,7 +179,7 @@ def AttachTrafficHistory(sub_bt, bt_path, bt_name, D, weights):
 		sub_bt['norm_traffic_hist'] = []
 	sub_bt.to_csv(os.path.join(bt_path, bt_name + "_CNW_TrafficHist.csv"), index = False)
 	return sub_bt
-			
+
 def AttachWeatherHistory(sub_bt, bt_path, bt_name, D, weights):
 	weather_history = []; historical_window = D['traffic_system_memory']
 	if len(sub_bt) > 0:
@@ -200,18 +200,18 @@ def CalculateAntecedentWeather(weather_history, weights, weather_cost_facs, hist
 		return np.sum([weather_cost_facs[weather]*w for weather,w in zip(weather_history, weights)])
 	else:
 		normalized_weights = NormalizeWeights(weights[0:len(weather_history)], np.sum(weights))
-		return np.sum([weather_cost_facs[weather]*w for weather,w in zip(weather_history, normalized_weights)])		
+		return np.sum([weather_cost_facs[weather]*w for weather,w in zip(weather_history, normalized_weights)])
 
 def CalculateAntecedentTraffic(norm_traffic_history, weights, historical_window):
 	if len(norm_traffic_history) == historical_window:
 		return np.sum([norm_traffic * weight for norm_traffic, weight in zip(norm_traffic_history, weights)])
-	else: 
+	else:
 		normalized_weights = NormalizeWeights(weights[0:len(norm_traffic_history)], np.sum(weights))
 		return np.sum([norm_traffic * weight for norm_traffic, weight in zip(norm_traffic_history, normalized_weights)])
-	
+
 def NormalizeWeights(weights, norm_sum):
 	return [float(w)/norm_sum for w in weights]
-	
+
 def GetAcceptableTimeRanges(time_range):
 	"""Given a (time_range) in minutes, determine the appropriate five minute intervals
 	peripheral to the key time that are acceptable for similar pairing.  For instance, if
@@ -245,17 +245,17 @@ def GetCorrectDaytimes(traffic_sub_bt, day_of_week, current_time, subset, analys
 	return the list of daytimes that are appropriate."""
 	if analysis_day >= 0: #if we're working our way down to a specific day-of-the-week
 		return traffic_sub_bt[np.logical_and(np.logical_and(traffic_sub_bt.day_of_week == analysis_day,
-									  traffic_sub_bt.time_of_day < current_time + 0.001), 
+									  traffic_sub_bt.time_of_day < current_time + 0.001),
 									  traffic_sub_bt.time_of_day > current_time - 0.001)], [analysis_day]
 
 	else: #'S' in subset, grab weekday or weekends
 		if 'S' in subset: #it's a weekend
 			return traffic_sub_bt[np.logical_and(np.logical_and(traffic_sub_bt.day_of_week >= 5,
-									  traffic_sub_bt.time_of_day < current_time + 0.001), 
+									  traffic_sub_bt.time_of_day < current_time + 0.001),
 									  traffic_sub_bt.time_of_day > current_time - 0.001)], [5,6]
 		else: #it's a weekday
 			return traffic_sub_bt[np.logical_and(np.logical_and(traffic_sub_bt.day_of_week < 5,
-									  traffic_sub_bt.time_of_day < current_time + 0.001), 
+									  traffic_sub_bt.time_of_day < current_time + 0.001),
 									  traffic_sub_bt.time_of_day > current_time - 0.001)], [0,1,2,3,4]
 
 def GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day, time_range, day_of_week, analysis_day = -1):
@@ -314,11 +314,11 @@ def	AddEmptyDic(a, pcts, PredictionDic):
 	print "Insufficient data for site %d" % a
 	for p in pcts:				#we cannot expand the dataset...and so we should return an empty list.
 		PredictionDic[str(a)][str(p)] = []
-	return PredictionDic	
+	return PredictionDic
 
 def NoPrediction(all_pair_ids, D):
 	"""In this case, we are not generating predictions, but rather reporting the historical values
-	in json format."""	
+	in json format."""
 	ReportDictionary = {}
 	for a in all_pair_ids.pair_id:
 		print 'Reporting times (without prediction) for roadway %d' % a
@@ -326,17 +326,17 @@ def NoPrediction(all_pair_ids, D):
 		sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) +
 								"_" + "Cleaned_Normalized_Weather.csv")).fillna(' ')
 		sub_bt = sub_bt[np.logical_and(sub_bt.insert_time >= D['start_date'], sub_bt.insert_time <= D['end_date'])]
-		for i,t in zip(sub_bt.insert_time, sub_bt.speed): 
+		for i,t in zip(sub_bt.insert_time, sub_bt.speed):
 			if type(t) == str: #missing time...
 				ReportDictionary[str(a)]['speed'].append('null')
 			else:
 				ReportDictionary[str(a)]['speed'].append(min(float(t), D['max_speed']))
-			ReportDictionary[str(a)]['insert_time'].append(mass.YYYYDOY_to_Datetime(i).isoformat())	
+			ReportDictionary[str(a)]['insert_time'].append(mass.YYYYDOY_to_Datetime(i).isoformat())
 	ReportDictionary['Start'] = mass.YYYYDOY_to_Datetime(D['start_date']).isoformat()
 	ReportDictionary['End'] = mass.YYYYDOY_to_Datetime(D['end_date']).isoformat()
-	return ReportDictionary	
-	
-def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_of_week, current_datetime, pct_range, 
+	return ReportDictionary
+
+def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_of_week, current_datetime, pct_range,
 								  time_range, bt_path, bt_name, pcts, subset, pred_len, time_of_day, weather_kernel_pct,
 								  start_date, end_date, use_traffic_hist = True):
 	"""Iterate over all pair_ids and determine similar matches in terms of time_of_day,
@@ -345,7 +345,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 	traffic_column = 'norm_traffic_hist' if use_traffic_hist else 'Normalized_t'
 	weather_severity_fac, min_matches, min_weather_kernel_size, min_traffic_bt_size = 2.5, 10, 2, 150 #change if needed
 	min_traffic_kernel_size = 50 #change if needed
-	
+
 	PredictionDic = {}
 	for a in all_pair_ids.pair_id: #iterate over each pair_id and generate a string of predictions
 		PredictionDic[str(a)] = {}
@@ -365,7 +365,7 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			if L_w == 0:
 				print "NO HISTORICAL EXAMPLES OF THIS WEATHER TYPE AT ROADWAY %d." % a
 				PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
-			if 'T' in subset and PredictionDic[str(a)] == {}:  
+			if 'T' in subset and PredictionDic[str(a)] == {}:
 				traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range, L_w, traffic_column)
 				if len(traffic_sub_bt) < min_traffic_bt_size:
 					traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range * 2, L_w, traffic_column)
@@ -376,22 +376,22 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 				day_sub_bt	= GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 								time_range * max(int(ps_and_cs[str(a)][1]/weather_severity_fac),1), day_of_week)
 				if len(day_sub_bt) < min_matches: #if our similarity requirements are too stringent
-					day_sub_bt = RelaxRequirements_GetMatches(traffic_sub_bt, current_datetime, subset, time_of_day, time_range, 
+					day_sub_bt = RelaxRequirements_GetMatches(traffic_sub_bt, current_datetime, subset, time_of_day, time_range,
 								ps_and_cs, a, weather_severity_fac, day_of_week, min_matches)
 					if len(day_sub_bt) < min_matches:
 						PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
-			elif ('0' in subset or '1' in subset or '2' in subset or '3' in subset 
+			elif ('0' in subset or '1' in subset or '2' in subset or '3' in subset
 				  or '4' in subset or '5' in subset or '6' in subset) and PredictionDic[str(a)] == {}: #it's a specific day-of-week
 				day_sub_bt = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 								time_range * max(int(ps_and_cs[str(a)][1]/weather_severity_fac),1), day_of_week, int(subset[-1]))
 				if len(day_sub_bt) < min_matches: #if our similarity requirements are too stringent
-					day_sub_bt = RelaxRequirements_GetMatches(traffic_sub_bt, current_datetime, subset, time_of_day, time_range, 
+					day_sub_bt = RelaxRequirements_GetMatches(traffic_sub_bt, current_datetime, subset, time_of_day, time_range,
 								ps_and_cs, a, weather_severity_fac, day_of_week, min_matches)
 					if len(day_sub_bt) < min_matches:
 						PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
 			else:
 				day_sub_bt = traffic_sub_bt
-			if len(day_sub_bt) > min_matches: 
+			if len(day_sub_bt) > min_matches:
 				for p in pcts:
 					PredictionDic[str(a)][str(p)] = [] #will predict 5 min, 10 min, ... , 23hrs and 55min, 24 hrs
 								  #######Generate Predictions#####
@@ -418,8 +418,8 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 	#	json.dump(PredictionDic, outfile)
 	return PredictionDic
 
-def RelaxRequirements_GetMatches(traffic_sub_bt, current_datetime, subset, time_of_day, time_range, 
-								ps_and_cs, a, weather_severity_fac, day_of_week, min_matches):	
+def RelaxRequirements_GetMatches(traffic_sub_bt, current_datetime, subset, time_of_day, time_range,
+								ps_and_cs, a, weather_severity_fac, day_of_week, min_matches):
 	###Step 1: convert from a specific day 'e.g. Tuesday' to a more general classification 'e.g. weekday'
 	if subset[-1] in ['5','6']:
 		subset = subset.replace('O','S')
@@ -446,7 +446,7 @@ def RelaxRequirements_GetMatches(traffic_sub_bt, current_datetime, subset, time_
 				matches = GetSub_Times_and_Days(traffic_sub_bt, current_datetime, subset, time_of_day,
 						time_range * 8 * max(int(ps_and_cs[str(a)][1]/weather_severity_fac),1), day_of_week)
 				return matches
-	
+
 def DefaultPredictions(a, D, pcts, PredictionDic):
 	"""For a given roadway (a) and parameter dictionary (D), update all percentiles (pct) in (PredictionDict)
 	with default predictions."""
@@ -455,7 +455,7 @@ def DefaultPredictions(a, D, pcts, PredictionDic):
 	for p in pcts: #NOTE, WITHOUT CURRENT INFO, ALL PERCENTILES WILL BE THE SAME (DEFAULT)
 		PredictionDic[str(a)][str(p)] = pred_list
 	return PredictionDic
-	
+
 def RoundToFive(current_datetime):
 	"""Rounds a (current_datetime) to the nearest multiple of 5."""
 	minute = current_datetime.minute; second = current_datetime.second
@@ -466,13 +466,13 @@ def RoundToFive(current_datetime):
 	else:
 		current_datetime = current_datetime.replace(minute = rounded_minute, second = 0)
 	return current_datetime
-	
-def UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, 
+
+def UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week,
 							current_datetime, pred_len, time_of_day, max_speed, ps_and_cs, smoother):
 	"""Turn the normalized predictions from (PredictionDic) back into the standard-form
 	estimates by using (DiurnalDic)."""
 	UnNormDic = {}
-	if time_of_day == '': #meaning this was not explicitly set 
+	if time_of_day == '': #meaning this was not explicitly set
 		UnNormDic['Start'] = RoundToFive(current_datetime).isoformat() #current time, each prediction is 5,10,...minutes after
 	else:
 		minutes_into_day = round(time_of_day * 288, 0) * 5
@@ -485,7 +485,7 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week,
 		if str(road) in ps_and_cs.keys():
 			for p in PredictionDic[str(road)].keys():
 				norm_seq = PredictionDic[str(road)][str(p)]
-				if len(norm_seq) == 0: 
+				if len(norm_seq) == 0:
 					UnNormDic[str(road)][str(p)] = []
 				else:
 					UnNormDic[str(road)][str(p)] = [min(n, max_speed)* float(min(smoother, i+1))/smoother + float(max(0,smoother-i-1))/smoother * float(ps_and_cs[str(road)][2]) for i,n in enumerate(norm_seq)]
@@ -504,7 +504,7 @@ def PctMap(pct_keys):
 		else:
 			pct_map[key] = str(100 - int(key))
 	return pct_map
-	
+
 def NDigitString(n, num):
 	"""Given a prescribed length of a digit string (n), turn a number (num) into the appropriate length
 	string with leading zeroes.  For instance, NDigitString(3, 12) should return '012', NDigitString(3,9)
@@ -524,7 +524,7 @@ def GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_le
 	travel times.  Note, if we are beginning at 12pm on Sunday, within 24 hours, we will be making
 	predictions for the subsequent Monday morning, a different list from DiurnalDic"""
 	current_Diurnal_key = str(road) + "_" + str(day_of_week); fixed_pred_len = pred_len #this will not be changed
-	if current_Diurnal_key not in DiurnalDic.keys(): 
+	if current_Diurnal_key not in DiurnalDic.keys():
 		print "No data from segment %s historically on day %s, returning an empty list." % (str(road), str(day_of_week))
 		return []
 	day_index = GetIndexFromDatetime(current_datetime) #how many 5-minute intervals are we into the day
@@ -537,7 +537,7 @@ def GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_le
 			new_datetime = current_datetime + datetime.timedelta(minutes = 1440) #the 'next' day
 			new_day_of_week = AdjustDayOfWeek(current_datetime.day, new_datetime.day, day_of_week) #which day of the week?
 			next_Diurnal_key = str(road) + "_" + str(new_day_of_week) #the DiurnalDic key for next-day predictions
-			if next_Diurnal_key not in DiurnalDic.keys(): 
+			if next_Diurnal_key not in DiurnalDic.keys():
 				print "No data from segment %s historically on day %s, defaulting to a static, 100s transit time." % (str(road), str(day_of_week))
 				return []
 			d_seq = d_seq + DiurnalDic[current_Diurnal_key][(day_index + 1):] + DiurnalDic[next_Diurnal_key][0:day_index+1]
@@ -561,7 +561,7 @@ def GetJSON(f_path, f_name):
 
 def DefineMaximums(D, all_pair_ids):
 	"""To avoid predictions of unrealistically high travel speeds, given a dictionary (D) of parameters,
-	and a list of (all_pair_ids), return the maximum recorded speed from (DiurnalDic) 
+	and a list of (all_pair_ids), return the maximum recorded speed from (DiurnalDic)
 	for the given roadway as a limit on predictions."""
 	MaximumDic = {}
 	for a in all_pair_ids.pair_id:
@@ -610,7 +610,7 @@ def SubBt_Cleaned_to_PreNormalized(D, a):
 	"""The cleaned bt file must be transformed from its original 'cleaned' format to a form with '/N' examples removed,
 	strings converted to floats, and a day-of-week column added where needed.  Use the parameter dictionary (D) to convert roadway (a)"""
 	sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned.csv"))
-	if len(sub_bt) > 0: 
+	if len(sub_bt) > 0:
 		sub_bt = data.CleanBlueToad(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #remove "/N" examples
 		sub_bt = data.FloatConvert(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #convert strings to float where possible
 		sub_bt = AddDayOfWeekColumn(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a)) #0-Mon, 6-Sun
@@ -629,7 +629,7 @@ def HardCodedParameters():
 	'w_def': 'Boston, Logan International Airport ',
 	'steps_to_smooth': 12, #how long until our prediction fully reflects future estimates
 	"window" : 12, #how many five-minute interval defines a suitable moving-average window
-	"day_dict" : {'monday' : 0, 'tuesday' : 1, 'wednesday' : 2, 'thursday' : 3, 'friday' : 4, 
+	"day_dict" : {'monday' : 0, 'tuesday' : 1, 'wednesday' : 2, 'thursday' : 3, 'friday' : 4,
 				  'saturday' : 5, 'sunday' : 6},
 	#bt_proc can be "no_update" if we are not processing/normalizing...otherwise the whole process ensues
 	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
@@ -645,7 +645,12 @@ def HardCodedParameters():
 	"WeatherURL" : "http://w1.weather.gov/xml/current_obs/",
 	"bluetoad_type" : "csv", #can be set to 'csv' or 'zip'
 	"path_to_blue_toad_csv" :  "http://acollier.com/traffichackers/model_history.csv",
-	"path_to_blue_toad_zip" : "https://raw.githubusercontent.com/hackreduce/MassDOThack/master/Road_RTTM_Volume/massdot_bluetoad_data.zip"}
+	"path_to_blue_toad_zip" : "https://raw.githubusercontent.com/hackreduce/MassDOThack/master/Road_RTTM_Volume/massdot_bluetoad_data.zip",
+
+	"traffic_system_memory" : 72, #number of 5-min-steps to consider for weather conditions/traffic conditions
+	"traffic_similarity_pct" : 0.2, #how similar must historical traffic be? (0.1 means we located the 10% most similar)
+	"weather_kernel_pct" : 0.3, #how similar must historical weather be?
+	"weather_cost_facs" : {"SN" : 3, "RA" : 1, "FG" : 1, " " : 0}}
 
 	D["weather_dir"] = os.path.join(D['data_path'], "NCDC_Weather")
 	return D
@@ -672,11 +677,11 @@ def PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
 	"""Generate forward predictions, then unnormalize and return in dictionary form"""
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
-									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, 
+									D['update_path'], D['bt_name'], D['pct_tile_list'], subset,
 									D['pred_duration'], time_of_day, D['weather_kernel_pct'], D['start_date'], D['end_date'])
 	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, current_datetime, D['pred_duration'], 										time_of_day, D['max_speed'], pairs_and_conditions, D['steps_to_smooth'])
 	return CurrentPredDic
-	
+
 def main(D, output_file_name, subset, time_of_day):
 	"""Main module"""
 	NOAA_df = PrePrep(D) #create directories and/or download bluetoad data if required.
@@ -696,7 +701,7 @@ def main(D, output_file_name, subset, time_of_day):
 		NOAADic = NCDC.BuildClosestNOAADic(NOAA_df, all_pair_ids.pair_id, D) #which weather site for which roadway?
 	else:
 		NOAADic = GetJSON(D['update_path'], D['WeatherInfo']) #read in the locations of closest weather sites
-	DD_flag = False  	
+	DD_flag = False
 	for a in all_pair_ids.pair_id: #process by site,
 		flag = 0; ##Check if we've gone through the normalization steps...
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):
@@ -711,11 +716,11 @@ def main(D, output_file_name, subset, time_of_day):
 			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv"))
 			sub_bt = AttachWeatherData(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D['weather_dir'], D["weather_site_default"])
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_CNW_TrafficHist.csv")):
-			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv"))		
+			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv"))
 			sub_bt = AttachTrafficHistory(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D, weights)
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_CNW_TrafficHist_WeatherHist.csv")):
 			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_CNW_TrafficHist.csv"))
-			sub_bt = AttachWeatherHistory(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D, weights)	
+			sub_bt = AttachWeatherHistory(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D, weights)
 	#Write full DiurnalDictionary to a .txt file as a .json
 	if DD_flag:
 		with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'wb') as outfile:
@@ -724,7 +729,7 @@ def main(D, output_file_name, subset, time_of_day):
 		MaximumDic = DefineMaximums(D, all_pair_ids)
 	else:
 		MaximumDic = GetJSON(D['update_path'], "MaximumDic.txt") #read in the minimum predictions
-	if D['predict'] != 0: #if we are generating forward predictions 
+	if D['predict'] != 0: #if we are generating forward predictions
 		day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_speed_history'], DiurnalDic, D['traffic_system_memory'], weights, D['path_to_current'])
 		if time_of_day == "": #if we are interested in predictions based on current conditions
 			pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions, weights)
@@ -745,28 +750,12 @@ def main(D, output_file_name, subset, time_of_day):
 	with open(os.path.join(D['update_path'], output_file_name), 'wb') as outfile:
 		json.dump(CurrentPredDic, outfile)
 	return None
-	
+
 if __name__ == "__main__":
 	#'W' - weather, 'T' - traffic conditions, 'D' - day of week, 'S' - Sat/Sun vs. Mon-Fri.  The options
 	#are invoked by including the letters in the input string, subset.  For example.  Using 'TD' as the
 	#string will choose examples based on traffic and the day of week, but not weather...
-	D = {"pred_duration" : 288, #hours of prediction
-	'steps_to_smooth': 12, #how long until our prediction fully reflects future estimates
-	"window" : 12, #how many five-minute interval defines a suitable moving-average window
-	"day_dict" : {'monday' : 0, 'tuesday' : 1, 'wednesday' : 2, 'thursday' : 3, 'friday' : 4, 
-				  'saturday' : 5, 'sunday' : 6},
-	#bt_proc can be "no_update" if we are not processing/normalizing...otherwise the whole process ensues
-	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
-	"time_range" : 10, #how far from the current time is considered 'similar'?
-	"max_speed" : 85, #what is the highest speed will allow ourselves to report?
-	"weather_fac_dic" : {' ': 1, 'RA' : 3, 'FG' : 10, 'SN' : 30}, #how many more must we grab, by cond?
-	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
-										#along with the best and worst-case scenarios
-	"traffic_system_memory" : 72, #number of 5-min-steps to consider for weather conditions/traffic conditions
-	"traffic_similarity_pct" : 0.2, #how similar must historical traffic be? (0.1 means we located the 10% most similar)
-	"weather_kernel_pct" : 0.3, #how similar must historical weather be?
-	"weather_cost_facs" : {"SN" : 3, "RA" : 1, "FG" : 1, " " : 0}
-	}
+	D = HardCodedParameters()
 	environment_vars = GetJSON("","config.json")
 	for key in environment_vars:
 		D[key] = environment_vars[key] #add environmental variables to the larger dictionary
@@ -774,12 +763,12 @@ if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument("day", choices=['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
-						'today', 'weekday', 'weekend'], help = "day of week option, must be a lowercase day of the week, 'today', 'weekday', or 'weekend'")						
+						'today', 'weekday', 'weekend'], help = "day of week option, must be a lowercase day of the week, 'today', 'weekday', or 'weekend'")
 	parser.add_argument("output_file_name", help = "the name of the file ('.txt' included) to which predictions are written.")
 	parser.add_argument("-t", "--traffic", help = "traffic, can be included as '-t' or '-traffic'", action = "count")
 	parser.add_argument("-w", "--weather", help = "weather, can be included as '-w' or '--weather'", action = "count")
-	parser.add_argument("-l", "--length", help = "user-specified duration, in five-minute increments, default of 288 (one day)", 
-						type = int, default = 288) 
+	parser.add_argument("-l", "--length", help = "user-specified duration, in five-minute increments, default of 288 (one day)",
+						type = int, default = 288)
 	parser.add_argument("-hr", "--hour", help = "choose an hour of the day, of the form 00:00 - 23:59.  It will round to the nearest 5min.  It negates the usage of weather or traffic.", type = str, default = '')
 	parser.add_argument("-sd", "--start_date", help = "the start date to be considered from the historical data (YYYYDOY format).",
 						type = int, default = 0)
@@ -793,32 +782,30 @@ if __name__ == "__main__":
 	if args.weather >= 1 and args.hour == '': subset += 'W'  #only incorporate weather/traffic if this is not a historical...
 	if args.traffic >= 1 and args.hour == '': subset += 'T'  #...specific time-of-day analysis
 	D['pred_duration'] = args.length #define the length of prediction
-	
+
 	#define the day of week scope to be considered
-	if args.day == 'weekend': 
+	if args.day == 'weekend':
 		subset += 'S'; print "WEEKEND ANALYSIS"
-	elif args.day == 'weekday': 
+	elif args.day == 'weekday':
 		subset += 'Y'; print "WEEKDAY ANALYSIS"
 	elif args.day == 'today':
 		subset += 'O'; print "ANAYLSIS FOR TODAY"
 	else:
-		subset += str(D['day_dict'][args.day]); 
+		subset += str(D['day_dict'][args.day]);
 	out_name = args.output_file_name
-	
+
 	#define the temporal span to be considered
 	D['start_date'] = args.start_date; D['end_date'] = args.end_date
-	
+
 	#define whether predictive analytics are necessary
 	D['predict'] = args.predict
-	
+
 	if args.hour != '' and ":" in args.hour and len(args.hour) == 5: #if we are looking for a specific day/time pairing historically rather than a prediction based on current conditions
 		hour, minute = args.hour.split(":")
 		time_of_day = float(hour)/24 + float(minute)/24/60
 		if time_of_day >= 1: time_of_day = time_of_day - int(time_of_day) #in case the number input exceeds 23:59.
 		time_of_day = NCDC.RoundToNearestNth(time_of_day, 288, 3) #return a five minute fraction (0/288 to 277/288)
-	else: 
+	else:
 		time_of_day = ""
 	print out_name, subset, D['pred_duration'], time_of_day
 	main(D, out_name, subset, time_of_day)
-	
-	
