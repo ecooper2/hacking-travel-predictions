@@ -58,7 +58,7 @@ def DefineDiurnalCycle(sub_bt, day, five_minute_fractions, MA_smooth_fac, def_va
 			else:
 				diurnal_cycle.append(diurnal_cycle[-1]) #with no other information default to the mean time at that roadway
 		else:
-			diurnal_cycle.append(np.mean(sub_cycle.travel_time))
+			diurnal_cycle.append(np.mean(sub_cycle.speed))
 	return MA_Smooth_Circular(diurnal_cycle, MA_smooth_fac/2) #return after a moving-average smoothing
 
 def GetSubBlueToad(bt, pair_id, day_of_week):
@@ -95,7 +95,7 @@ def GenerateDiurnalDic(bt, blue_toad_path, five_minute_fractions, window = 12):
 			print "Building diurnal cycle for roadway %d on day %d (Monday = 0, Sunday = 6)" % (u,day)
 			sub_bt = GetSubBlueToad(bt, u, day)
 			DiurnalDic[str(u) + "_" + str(day)] = DefineDiurnalCycle(sub_bt, day, five_minute_fractions, 
-														window, np.mean(bt.travel_time)) #default to mean
+														window, np.mean(bt.speed)) #default to mean
 	return DiurnalDic
 
 def NormalizeTravelTime(bt, DiurnalDic, blue_toad_path, blue_toad_name):
@@ -105,10 +105,10 @@ def NormalizeTravelTime(bt, DiurnalDic, blue_toad_path, blue_toad_name):
 	normalized_times = []
 	if len(bt) > 0: 
 		print "Now normalizing site %d" % int(bt.pair_id[0:1])
-		for p, d, i, t in zip(bt.pair_id, bt.day_of_week, bt.insert_time, bt.travel_time):
+		for p, d, i, t in zip(bt.pair_id, bt.day_of_week, bt.insert_time, bt.speed):
 			diurnal_key = str(p) + "_" + str(d) #to find the correct key of the dictionary
 			time_index = int((i - int(i)) * 288 + .0001)
-			normalized_times.append(t - DiurnalDic[diurnal_key][time_index])
+			normalized_times.append(round(t - DiurnalDic[diurnal_key][time_index], 2))
 		bt['Normalized_t'] = normalized_times
 	else:
 		bt['Normalized_t'] = []
@@ -224,18 +224,18 @@ def GetAcceptableTimeRanges(time_range):
 			acceptable_ranges.append(t * -5)
 	return acceptable_ranges
 
-def GetSub_Traffic(mini_bt, current_traffic_normalized, pct_range, L):
+def GetSub_Traffic(mini_bt, current_traffic_normalized, pct_range, L, traffic_column):
 	"""Travel times are skewed right...i.e. the lowest normalized result is ~-600 (10 min shorter),
 	but the longest normalized time is ~+10000 (3 hours longer)...thus, when looking for similar
 	matches, we can consider a much larger range at the upper end than the lower end.  Thus
 	function returns closest (pct_range) of the data, ensuring a relatively rich similar sample."""
-	mini_bt = mini_bt.sort("Normalized_t") #easier to find percentiles
-	if current_traffic_normalized >= np.max(mini_bt.Normalized_t): #above the max of the subset
+	mini_bt = mini_bt.sort(traffic_column) #easier to find percentiles
+	if current_traffic_normalized >= np.max(mini_bt[traffic_column]): #above the max of the subset
 		start_greater = .999*L
 	else:
-		start_greater = np.min((mini_bt.Normalized_t > current_traffic_normalized).nonzero()[0])
+		start_greater = np.min((mini_bt[traffic_column] > current_traffic_normalized).nonzero()[0])
 	percentile = start_greater * 1.0 / L #which percentile of travel time are we in?
-	percentile_range = (max(percentile - pct_range, 0), min(percentile + pct_range,100))
+	percentile_range = (max(percentile - pct_range, 0), min(percentile + pct_range,1))
 	start_ind, end_ind = int(percentile_range[0] * L), int(percentile_range[1] * L - 1)
 	return mini_bt[start_ind:end_ind]
 
@@ -316,23 +316,21 @@ def	AddEmptyDic(a, pcts, PredictionDic):
 		PredictionDic[str(a)][str(p)] = []
 	return PredictionDic	
 
-def NoPrediction(all_pair_ids, D, LengthDic):
+def NoPrediction(all_pair_ids, D):
 	"""In this case, we are not generating predictions, but rather reporting the historical values
 	in json format."""	
 	ReportDictionary = {}
 	for a in all_pair_ids.pair_id:
 		print 'Reporting times (without prediction) for roadway %d' % a
-		roadway_length = LengthDic[str(a)] if str(a) in LengthDic.keys() else 9999
-		ReportDictionary[str(a)] = {'travel_time' : [], 'insert_time' : []}
+		ReportDictionary[str(a)] = {'speed' : [], 'insert_time' : []}
 		sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) +
 								"_" + "Cleaned_Normalized_Weather.csv")).fillna(' ')
 		sub_bt = sub_bt[np.logical_and(sub_bt.insert_time >= D['start_date'], sub_bt.insert_time <= D['end_date'])]
-		for i,t in zip(sub_bt.insert_time, sub_bt.travel_time): 
+		for i,t in zip(sub_bt.insert_time, sub_bt.speed): 
 			if type(t) == str: #missing time...
-				ReportDictionary[str(a)]['travel_time'].append('null')
+				ReportDictionary[str(a)]['speed'].append('null')
 			else:
-				ReportDictionary[str(a)]['travel_time'].append(min(int(roadway_length * 3600.0 / 
-														float(t)), D['max_speed']))
+				ReportDictionary[str(a)]['speed'].append(min(float(t), D['max_speed']))
 			ReportDictionary[str(a)]['insert_time'].append(mass.YYYYDOY_to_Datetime(i).isoformat())	
 	ReportDictionary['Start'] = mass.YYYYDOY_to_Datetime(D['start_date']).isoformat()
 	ReportDictionary['End'] = mass.YYYYDOY_to_Datetime(D['end_date']).isoformat()
@@ -340,12 +338,13 @@ def NoPrediction(all_pair_ids, D, LengthDic):
 	
 def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_of_week, current_datetime, pct_range, 
 								  time_range, bt_path, bt_name, pcts, subset, pred_len, time_of_day, weather_kernel_pct,
-								  start_date, end_date):
+								  start_date, end_date, use_traffic_hist = True):
 	"""Iterate over all pair_ids and determine similar matches in terms of time_of_day,
 	weather, traffic, and day_of_week...and generate 288 five-minute predictions (a
 	24-hour prediction in 5-minute intervals)"""
-	
-	weather_severity_fac, min_matches, min_weather_kernel_size, min_traffic_bt_size = 2.5, 5, 2, 150 #change if needed
+	traffic_column = 'norm_traffic_hist' if use_traffic_hist else 'Normalized_t'
+	weather_severity_fac, min_matches, min_weather_kernel_size, min_traffic_bt_size = 2.5, 10, 2, 150 #change if needed
+	min_traffic_kernel_size = 50 #change if needed
 	
 	PredictionDic = {}
 	for a in all_pair_ids.pair_id: #iterate over each pair_id and generate a string of predictions
@@ -366,10 +365,10 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 			if L_w == 0:
 				print "NO HISTORICAL EXAMPLES OF THIS WEATHER TYPE AT ROADWAY %d." % a
 				PredictionDic = AddEmptyDic(a, pcts, PredictionDic) #Fill with empty lists
-			if 'T' in subset and PredictionDic[str(a)] == {}:
-				traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range, L_w)
+			if 'T' in subset and PredictionDic[str(a)] == {}:  
+				traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range, L_w, traffic_column)
 				if len(traffic_sub_bt) < min_traffic_bt_size:
-					traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range * 2, L_w)
+					traffic_sub_bt = GetSub_Traffic(weather_sub_bt, ps_and_cs[str(a)][0], pct_range * 2, L_w, traffic_column)
 			else:
 				traffic_sub_bt = weather_sub_bt
 			#locate similar days/times, more lax search in less common weather
@@ -400,13 +399,17 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 				for ind in xrange(pred_len): #for generating of predictions at each forward step
 					viable_future_indices = [day_sub_bt.index[i] + ind + 1 for i in xrange(len(day_sub_bt)) if day_sub_bt.index[i] + ind + 1 < L]
 					prediction_sub = sub_bt.iloc[viable_future_indices]
-					for p in pcts: #iterate over the percentiles required for estimation
-						if p == 'min': #if we're estimating a best case
-							PredictionDic[str(a)][str(p)].append(np.min(prediction_sub.Normalized_t))
-						elif p == 'max': #if we're estimating a worst case
-							PredictionDic[str(a)][str(p)].append(np.max(prediction_sub.Normalized_t))
-						else:
-							PredictionDic[str(a)][str(p)].append(np.percentile(prediction_sub.Normalized_t, p))
+					if len(prediction_sub) > 0:
+						for p in pcts: #iterate over the percentiles required for estimation
+							if p == 'min': #if we're estimating a best case
+								PredictionDic[str(a)][str(p)].append(np.min(prediction_sub.speed))
+							elif p == 'max': #if we're estimating a worst case
+								PredictionDic[str(a)][str(p)].append(np.max(prediction_sub.speed))
+							else:
+								PredictionDic[str(a)][str(p)].append(np.percentile(prediction_sub.speed, p))
+					else:
+						for p in pcts:
+							PredictionDic[str(a)][str(p)].append(PredictionDic[str(a)][str(p)][-1])
 			else:
 				print "no predictions generated for %d" % a
 		else: #use default...essentially dead-average conditions, flagged as -0.00001 rather than zero
@@ -464,11 +467,11 @@ def RoundToFive(current_datetime):
 		current_datetime = current_datetime.replace(minute = rounded_minute, second = 0)
 	return current_datetime
 	
-def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, LengthDic, day_of_week, 
+def UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, 
 							current_datetime, pred_len, time_of_day, max_speed, ps_and_cs, smoother):
 	"""Turn the normalized predictions from (PredictionDic) back into the standard-form
 	estimates by using (DiurnalDic)."""
-	UnNormDic = {}; pct_map = PctMap(PredictionDic['5490'].keys())
+	UnNormDic = {}
 	if time_of_day == '': #meaning this was not explicitly set 
 		UnNormDic['Start'] = RoundToFive(current_datetime).isoformat() #current time, each prediction is 5,10,...minutes after
 	else:
@@ -477,19 +480,18 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, LengthDic, day
 		current_datetime = current_datetime.replace(hour = h, minute = m, second = 0) #set this to the user-input start_time
 		UnNormDic['Start'] = current_datetime.isoformat()
 	for road in PredictionDic.keys(): #iterate over all pair_ids
-		min_time = MinimumDic[road] #shortest historical travel time for a roadway
-		roadway_length = LengthDic[road] if road in LengthDic.keys() else 9999 #length of segment, in miles
+		max_speed = MaximumDic[road] #shortest historical travel time for a roadway
 		UnNormDic[str(road)] = {}
-		std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_len)
 		if str(road) in ps_and_cs.keys():
 			for p in PredictionDic[str(road)].keys():
 				norm_seq = PredictionDic[str(road)][str(p)]
-				UnNormDic[str(road)][pct_map[str(p)]] = [int(min((3600 * roadway_length) / max(s + n, min_time), max_speed)
-				* float(min(smoother, i+1))/smoother + float(max(0,smoother-i-1))/smoother * float(ps_and_cs[str(road)][2]))
-				for i,(s,n) in enumerate(zip(std_seq, norm_seq))]
+				if len(norm_seq) == 0: 
+					UnNormDic[str(road)][str(p)] = []
+				else:
+					UnNormDic[str(road)][str(p)] = [min(n, max_speed)* float(min(smoother, i+1))/smoother + float(max(0,smoother-i-1))/smoother * float(ps_and_cs[str(road)][2]) for i,n in enumerate(norm_seq)]
 		else:
 			for p in PredictionDic[str(road)].keys():
-				UnNormDic[str(road)][pct_map[str(p)]] = None
+				UnNormDic[str(road)][str(p)] = None
 	return UnNormDic
 
 def PctMap(pct_keys):
@@ -557,27 +559,27 @@ def GetJSON(f_path, f_name):
 	json_data = open(os.path.join(f_path, f_name)).read()
 	return json.loads(json_data)
 
-def DefineMinimums(D, all_pair_ids):
+def DefineMaximums(D, all_pair_ids):
 	"""To avoid predictions of unrealistically high travel speeds, given a dictionary (D) of parameters,
-	and a list of (all_pair_ids), return the minimum recorded travel time from (DiurnalDic) 
+	and a list of (all_pair_ids), return the maximum recorded speed from (DiurnalDic) 
 	for the given roadway as a limit on predictions."""
-	MinimumDic = {}
+	MaximumDic = {}
 	for a in all_pair_ids.pair_id:
-		print "Definining minimum travel times for roadway %d" % a
+		print "Defining maximum travel times for roadway %d" % a
 		processed_file_path = os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" +
 							str(a) + "_" + "Cleaned_Normalized_Weather.csv")
 		if os.path.exists(processed_file_path):
 			site_df = pd.read_csv(processed_file_path)
-			min_time = np.min(site_df.travel_time)
-			if math.isnan(min_time):
-				MinimumDic[str(a)] = 0.001
+			max_time = np.max(site_df.speed)
+			if math.isnan(max_time):
+				MaximumDic[str(a)] = 0.001
 			else:
-				MinimumDic[str(a)] = min_time
+				MaximumDic[str(a)] = max_time
 		else:
-			MinimumDic[str(a)] = 0.001 #the flag for a missing minimum time (avoids division by 0)
-	with open(os.path.join(D['update_path'], 'MinimumPredictions.txt'), 'wb') as outfile:
-		json.dump(MinimumDic, outfile)
-	return MinimumDic
+			MaximumDic[str(a)] = 0.001 #the flag for a missing minimum time (avoids division by 0)
+	with open(os.path.join(D['update_path'], 'MaximumDic.txt'), 'wb') as outfile:
+		json.dump(MaximumDic, outfile)
+	return MaximumDic
 
 
 def GetZip(url, f_type):
@@ -656,24 +658,23 @@ def PrePrep(D):
 	if "zip" in D['bluetoad_type']: #if we are downloading a large .zip to unpack before running
 		if not os.path.exists(os.path.join(D['bt_path'], D['bt_name'] + ".zip")): #download all data, then run a full update if it does not exist.
 			if not os.path.exists(os.path.join(D['bt_path'], D['bt_name'] + ".csv")):
-				url = D['path_to_blue_toad_zip']
+				url = D['path_to_blue_toad_speed_zip']
 				GetZip(url, 'zip'); Unzip(D['bt_name'], D['bt_path']) #download the file, and unzip it.
 	elif "csv" in D['bluetoad_type']: #if we are downloading a .csv before running
 		if not os.path.exists(os.path.join(D['bt_path'], D['bt_name'] + ".csv")):
-			url = D['path_to_blue_toad_csv']
+			url = D['path_to_blue_toad_speed_csv']
 			GetZip(url, 'csv')
 	if not os.path.exists(os.path.join(D["update_path"], "IndividualFiles")): os.makedirs(os.path.join(D["update_path"], "IndividualFiles"))
 	return NOAA_df
 
 def PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
-					DiurnalDic, MinimumDic, LengthDic, day_of_week, current_datetime):
+					DiurnalDic, MaximumDic, day_of_week, current_datetime):
 	"""Generate forward predictions, then unnormalize and return in dictionary form"""
 	PredictionDic = GenerateNormalizedPredictions(all_pair_ids, pairs_and_conditions, D['weather_fac_dic'],
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
 									D['update_path'], D['bt_name'], D['pct_tile_list'], subset, 
 									D['pred_duration'], time_of_day, D['weather_kernel_pct'], D['start_date'], D['end_date'])
-	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MinimumDic, LengthDic, day_of_week, 
-					current_datetime, D['pred_duration'], time_of_day, D['max_speed'], pairs_and_conditions, D['steps_to_smooth'])
+	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, current_datetime, D['pred_duration'], 										time_of_day, D['max_speed'], pairs_and_conditions, D['steps_to_smooth'])
 	return CurrentPredDic
 	
 def main(D, output_file_name, subset, time_of_day):
@@ -715,18 +716,16 @@ def main(D, output_file_name, subset, time_of_day):
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_CNW_TrafficHist_WeatherHist.csv")):
 			sub_bt = pd.read_csv(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_CNW_TrafficHist.csv"))
 			sub_bt = AttachWeatherHistory(sub_bt, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a), D, weights)	
-	
 	#Write full DiurnalDictionary to a .txt file as a .json
 	if DD_flag:
 		with open(os.path.join(D['update_path'], 'DiurnalDictionary.txt'), 'wb') as outfile:
 			json.dump(DiurnalDic, outfile)
-	if not os.path.exists(os.path.join(D['update_path'], 'MinimumPredictions.txt')): #if we lack minimums for each site
-		MinimumDic = DefineMinimums(D, all_pair_ids)
+	if not os.path.exists(os.path.join(D['update_path'], 'MaximumDic.txt')): #if we lack minimums for each site
+		MaximumDic = DefineMaximums(D, all_pair_ids)
 	else:
-		MinimumDic = GetJSON(D['update_path'], "MinimumPredictions.txt") #read in the minimum predictions
-	LengthDic = GetJSON(D['data_path'], "LengthDic.json") #gather lengths of each segment
+		MaximumDic = GetJSON(D['update_path'], "MaximumDic.txt") #read in the minimum predictions
 	if D['predict'] != 0: #if we are generating forward predictions 
-		day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_current'], DiurnalDic)
+		day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_speed_history'], DiurnalDic, D['traffic_system_memory'], weights, D['path_to_current'])
 		if time_of_day == "": #if we are interested in predictions based on current conditions
 			pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions, weights)
 		else: #zero-out the normalized conditions, historical analysis starts from a normalized baseline of zero (typical conditions)
@@ -740,9 +739,9 @@ def main(D, output_file_name, subset, time_of_day):
 				pairs_and_conditions[k][0] = 0
 		if 'O' in subset: subset += str(day_of_week) #this means we are running the model based on whatever 'today' is.
 		CurrentPredDic = PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
-							DiurnalDic, MinimumDic, LengthDic, day_of_week, current_datetime)
+							DiurnalDic, MaximumDic, day_of_week, current_datetime)
 	else: #no need to spend time on gathering similar sets and unnormalizing
-		CurrentPredDic = NoPrediction(all_pair_ids, D, LengthDic) #if we are simply reporting a JSON for the relevant time subset
+		CurrentPredDic = NoPrediction(all_pair_ids, D) #if we are simply reporting a JSON for the relevant time subset
 	with open(os.path.join(D['update_path'], output_file_name), 'wb') as outfile:
 		json.dump(CurrentPredDic, outfile)
 	return None

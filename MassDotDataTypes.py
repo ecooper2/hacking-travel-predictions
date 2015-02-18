@@ -131,7 +131,7 @@ def CleanBlueToad(BlueToad_df, file_path, file_name):
 def FloatConvert(BlueToad_df, file_path, file_name):
 	"""Convert the travel_time column from strings to floats."""
 	print "Reformatting Travel Times As Floats...for site %d" % int(BlueToad_df.pair_id[0:1])
-	BlueToad_df.travel_time = BlueToad_df.travel_time.astype('float64')
+	BlueToad_df.speed = BlueToad_df.speed.astype('float64')
 	print "Rounding time of days..."
 	BlueToad_df['time_of_day'] = [round(math.modf(BlueToad_df.insert_time[i])[0],3) for i in BlueToad_df.index]
 	print "Writing to File"
@@ -156,9 +156,9 @@ def SlashDateToNumerical(date, days_in_month, leap_years):
 	else:
 		return int(year) * 1000 + DOY - 1 #thus, the first day of the year is 0
 
-def ColonTimeToDecimal(time):
+def ColonTimeToDecimal(colon_time):
 	"""Converts a HH:MM:SS (HH in military time) to a decimal between 0 and 1"""
-	split_time = time.split(":")
+	split_time = colon_time.split(":")
 	if len(split_time) == 2: #if this is solely HH:MM
 		hour, minute = split_time; second = '0'
 	else:
