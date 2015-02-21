@@ -73,7 +73,7 @@ def GetNormalizedTrafficHistory(historical_data, roadway, diurnal_history, weigh
 	else:
 		return [c - d for c,d in zip(historical_data[roadway] + [current_speed], diurnal_history)]
 			
-def GetCurrentInfo(massdot_history, DiurnalDic, traffic_system_memory, weights, path_to_current):
+def GetCurrentInfo(massdot_history, DiurnalDic, traffic_system_memory, weights, path_to_current, default_roadway):
 	"""To run a real-time prediction scheme, we must obtain four pieces of information.
 	The first is the current weather conditions.  We have not constructed a real-time query
 	to NOAA/NCDC.  This is probably above my pay-grade, but I can dig into it.  The second is
@@ -87,6 +87,8 @@ def GetCurrentInfo(massdot_history, DiurnalDic, traffic_system_memory, weights, 
 	keys_and_indices = GetDiurnalKeys_and_Indices(day_of_week, time_of_day_ind, traffic_system_memory)
 	pair_cond_weather_dic = {}
 	for roadway in [k for k in historical_data.keys() if k != 'Start']:
+		if str(roadway) + "_" + str(day_of_week) not in DiurnalDic.keys(): 
+			DiurnalDic = AddDummyValuesToDiurnalDic(DiurnalDic, day_of_week, roadway, default_roadway)
 		print "gathering current and recent conditions for roadway %s" % roadway
 		if roadway not in current_data.keys():
 			print "No recent data available for roadway %s" % roadway
@@ -105,6 +107,12 @@ def GetCurrentInfo(massdot_history, DiurnalDic, traffic_system_memory, weights, 
 		pair_cond_weather_dic[roadway] = [np.sum([n * w for n,w in zip(normalized_history, weights)]), ' ', current_speed]
 	return day_of_week, current_datetime, pair_cond_weather_dic
 	
+def	AddDummyValuesToDiurnalDic(DiurnalDic, day_of_week, roadway, default_roadway):
+	diurnal_key = roadway + "_" + str(day_of_week)
+	if not diurnal_key in DiurnalDic.keys():
+		DiurnalDic[diurnal_key] = DiurnalDic[str(default_roadway) + "_" + str(day_of_week)]
+	return DiurnalDic
+			
 def ParseCurrentJson(current_transit_dict): 
 	"""Given a json taken from mass-dot's real-time feed (current_transit_dict),  
 	return the real-time string and an appropriate data-frame with current information""" 

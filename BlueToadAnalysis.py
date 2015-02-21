@@ -402,11 +402,11 @@ def GenerateNormalizedPredictions(all_pair_ids, ps_and_cs, weather_fac_dic, day_
 					if len(prediction_sub) > 0:
 						for p in pcts: #iterate over the percentiles required for estimation
 							if p == 'min': #if we're estimating a best case
-								PredictionDic[str(a)][str(p)].append(np.min(prediction_sub.speed))
+								PredictionDic[str(a)][str(p)].append(np.min(prediction_sub.Normalized_t))
 							elif p == 'max': #if we're estimating a worst case
-								PredictionDic[str(a)][str(p)].append(np.max(prediction_sub.speed))
+								PredictionDic[str(a)][str(p)].append(np.max(prediction_sub.Normalized_t))
 							else:
-								PredictionDic[str(a)][str(p)].append(np.percentile(prediction_sub.speed, p))
+								PredictionDic[str(a)][str(p)].append(np.percentile(prediction_sub.Normalized_t, p))
 					else:
 						for p in pcts:
 							PredictionDic[str(a)][str(p)].append(PredictionDic[str(a)][str(p)][-1])
@@ -467,8 +467,8 @@ def RoundToFive(current_datetime):
 		current_datetime = current_datetime.replace(minute = rounded_minute, second = 0)
 	return current_datetime
 
-def UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week,
-							current_datetime, pred_len, time_of_day, max_speed, ps_and_cs, smoother):
+def UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, current_datetime, pred_len, time_of_day, 
+							max_speed, ps_and_cs, smoother, steps_to_diurnal_return):
 	"""Turn the normalized predictions from (PredictionDic) back into the standard-form
 	estimates by using (DiurnalDic)."""
 	UnNormDic = {}
@@ -482,13 +482,14 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week,
 	for road in PredictionDic.keys(): #iterate over all pair_ids
 		max_speed = MaximumDic[road] #shortest historical travel time for a roadway
 		UnNormDic[str(road)] = {}
+		std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_len)
 		if str(road) in ps_and_cs.keys():
 			for p in PredictionDic[str(road)].keys():
 				norm_seq = PredictionDic[str(road)][str(p)]
 				if len(norm_seq) == 0:
 					UnNormDic[str(road)][str(p)] = []
 				else:
-					UnNormDic[str(road)][str(p)] = [min(n, max_speed)* float(min(smoother, i+1))/smoother + float(max(0,smoother-i-1))/smoother * float(ps_and_cs[str(road)][2]) for i,n in enumerate(norm_seq)]
+					UnNormDic[str(road)][str(p)] = [(min(n + s, max_speed)* float(min(smoother, i+1))/smoother + float(max(0,smoother-i-1))/smoother * float(ps_and_cs[str(road)][2])) * float(steps_to_diurnal_return - i)/steps_to_diurnal_return + float(i)/steps_to_diurnal_return * s for i, (n,s) in enumerate(zip(norm_seq, std_seq))]
 		else:
 			for p in PredictionDic[str(road)].keys():
 				UnNormDic[str(road)][str(p)] = None
@@ -625,9 +626,11 @@ def HardCodedParameters():
 	"data_path" : os.path.join("data"),
 	"bt_name" : "massdot_bluetoad_data",
 	"pred_duration" : 288, #hours of prediction
+	"default_roadway_pattern" : 5587, #if we have no diurnal cycle, which roadway's pattern shall we use????
 	"weather_site_name" : "closest", "weather_site_default" : "BostonAirport",
 	'w_def': 'Boston, Logan International Airport ',
-	'steps_to_smooth': 12, #how long until our prediction fully reflects future estimates
+	'steps_to_smooth': 12, #how long until our prediction fully reflects future estimates?
+	'steps_to_diurnal_return': 288, #how long until our predictions should simply be the diurnal estimate for that roadway?
 	"window" : 12, #how many five-minute interval defines a suitable moving-average window
 	"day_dict" : {'monday' : 0, 'tuesday' : 1, 'wednesday' : 2, 'thursday' : 3, 'friday' : 4,
 				  'saturday' : 5, 'sunday' : 6},
@@ -679,7 +682,7 @@ def PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
 									D['update_path'], D['bt_name'], D['pct_tile_list'], subset,
 									D['pred_duration'], time_of_day, D['weather_kernel_pct'], D['start_date'], D['end_date'])
-	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, current_datetime, D['pred_duration'], 										time_of_day, D['max_speed'], pairs_and_conditions, D['steps_to_smooth'])
+	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, current_datetime, D['pred_duration'], 										time_of_day, D['max_speed'], pairs_and_conditions, D['steps_to_smooth'], D['steps_to_diurnal_return'])
 	return CurrentPredDic
 
 def main(D, output_file_name, subset, time_of_day):
@@ -730,7 +733,7 @@ def main(D, output_file_name, subset, time_of_day):
 	else:
 		MaximumDic = GetJSON(D['update_path'], "MaximumDic.txt") #read in the minimum predictions
 	if D['predict'] != 0: #if we are generating forward predictions
-		day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_speed_history'], DiurnalDic, D['traffic_system_memory'], weights, D['path_to_current'])
+		day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_speed_history'], DiurnalDic, D['traffic_system_memory'], weights, D['path_to_current'], D['default_roadway_pattern'])
 		if time_of_day == "": #if we are interested in predictions based on current conditions
 			pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions, weights)
 		else: #zero-out the normalized conditions, historical analysis starts from a normalized baseline of zero (typical conditions)
@@ -741,7 +744,7 @@ def main(D, output_file_name, subset, time_of_day):
 			elif 'Y' in subset:
 				day_of_week = 1 if day_of_week > 4 else day_of_week #to ensure appropriate UnNormalization (Tue - Thu as weekday standard)
 			for k in pairs_and_conditions.keys():
-				pairs_and_conditions[k][0] = 0
+				pairs_and_conditions[k][0], pairs_and_conditions[k][1] = 0,0
 		if 'O' in subset: subset += str(day_of_week) #this means we are running the model based on whatever 'today' is.
 		CurrentPredDic = PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
 							DiurnalDic, MaximumDic, day_of_week, current_datetime)
