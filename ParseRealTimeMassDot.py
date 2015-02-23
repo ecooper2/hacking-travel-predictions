@@ -92,7 +92,7 @@ def GetCurrentInfo(massdot_history, DiurnalDic, traffic_system_memory, weights, 
 		print "gathering current and recent conditions for roadway %s" % roadway
 		if roadway not in current_data.keys():
 			print "No recent data available for roadway %s" % roadway
-			if roadway + "_0" not in DiurnalDic.keys():
+			if roadway + "_" + str(day_of_week) not in DiurnalDic.keys():
 				print "No historical data available for roadway %s" % roadway
 				current_speed = -1
 				normalized_history = [0 for w in weights] #assume 'typical conditions'
