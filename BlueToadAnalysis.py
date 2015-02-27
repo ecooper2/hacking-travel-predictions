@@ -629,14 +629,14 @@ def HardCodedParameters():
 	"default_roadway_pattern" : 5587, #if we have no diurnal cycle, which roadway's pattern shall we use????
 	"weather_site_name" : "closest", "weather_site_default" : "BostonAirport",
 	'w_def': 'Boston, Logan International Airport ',
-	'steps_to_smooth': 12, #how long until our prediction fully reflects future estimates?
-	'steps_to_diurnal_return': 288, #how long until our predictions should simply be the diurnal estimate for that roadway?
+	'steps_to_smooth': 6, #how long until our prediction fully reflects future estimates?
+	'steps_to_diurnal_return': 576, #how long until our predictions should simply be the diurnal estimate for that roadway?
 	"window" : 12, #how many five-minute interval defines a suitable moving-average window
 	"day_dict" : {'monday' : 0, 'tuesday' : 1, 'wednesday' : 2, 'thursday' : 3, 'friday' : 4,
 				  'saturday' : 5, 'sunday' : 6},
 	#bt_proc can be "no_update" if we are not processing/normalizing...otherwise the whole process ensues
 	"pct_range" : .1, #how far from the current traffic's percentile can we deem 'similar'?
-	"time_range" : 10, #how far from the current time is considered 'similar'?
+	"time_range" : 30, #how far from the current time is considered 'similar'?
 	"max_speed" : 85, #what is the highest speed will allow ourselves to report?
 	"weather_fac_dic" : {' ': 1, 'RA' : 3, 'FG' : 5, 'SN' : 30}, #how many more must we grab, by cond?
 	"pct_tile_list" : ['min', 10, 25, 50, 75, 90, 'max'], #which percentiles shall be made available,
