@@ -489,7 +489,7 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, c
 				if len(norm_seq) == 0:
 					UnNormDic[str(road)][str(p)] = []
 				else:
-					UnNormDic[str(road)][str(p)] = [(min(n + s, max_speed)* float(min(smoother, i+1))/smoother + float(max(0,smoother-i-1))/smoother * float(ps_and_cs[str(road)][2])) * float(steps_to_diurnal_return - i)/steps_to_diurnal_return + float(i)/steps_to_diurnal_return * s for i, (n,s) in enumerate(zip(norm_seq, std_seq))]
+					UnNormDic[str(road)][str(p)] = [round((min(n + s, max_speed)* float(min(smoother, i+1))/smoother + float(max(0,smoother-i-1))/smoother * float(ps_and_cs[str(road)][2])) * float(steps_to_diurnal_return - i)/steps_to_diurnal_return + float(i)/steps_to_diurnal_return * s, 0) for i, (n,s) in enumerate(zip(norm_seq, std_seq))]
 		else:
 			for p in PredictionDic[str(road)].keys():
 				UnNormDic[str(road)][str(p)] = None
