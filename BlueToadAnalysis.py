@@ -42,24 +42,33 @@ def GetDayOfWeek(date):
 											', ' + str(real_date.year), "%m %d, %Y").strftime('%w')
 	return (int(day_of_week) + 6) % 7 #adjusts from Monday = 1 to Monday = 0
 
-def DefineDiurnalCycle(sub_bt, day, five_minute_fractions, MA_smooth_fac, def_val):
+def DefineDiurnalCycle(sub_bt, day, five_minute_fractions, pct_tile_list, MA_smooth_fac, def_val):
 	"""Given a specific pair_id and day-of-the-week, return a diurnal cycle list, per five-minute
 	interval over the the 288 5-minute intervals of the day.  (MA_smooth_fac) defines the number
 	of five-minute intervals used to general the moving average.  Ex: 12 implies a one-hour total
 	window (30 minutes on either side).  (def_val) is a default value in the absence of other info."""
-	diurnal_cycle = []
+	diurnal_cycle = {}
+	for p in pct_tile_list:
+		diurnal_cycle[str(p)] = []
 	times_of_day = [round(i - int(i),3) for i in sub_bt.insert_time] #just the fraction of the day
 	sub_bt['times_of_day'] = times_of_day
 	for f in five_minute_fractions:
 		sub_cycle = sub_bt[sub_bt.times_of_day == round(f,3)] if len(sub_bt) > 0 else []
-		if len(sub_cycle) == 0: #meaning there are no examples on this day of the week at this time
-			if len(diurnal_cycle) == 0:
-				diurnal_cycle.append(def_val) #assume the previous five-minute timestamp's time
+		for p in pct_tile_list:
+			if len(sub_cycle) == 0: #meaning there are no examples on this day of the week at this time
+				if len(diurnal_cycle[str(p)]) == 0:
+					diurnal_cycle[str(p)].append(def_val) #assume the previous five-minute timestamp's time
+				else:
+					diurnal_cycle[str(p)].append(diurnal_cycle[str(p)][-1]) #with no other information default to the mean time at that roadway
 			else:
-				diurnal_cycle.append(diurnal_cycle[-1]) #with no other information default to the mean time at that roadway
-		else:
-			diurnal_cycle.append(np.mean(sub_cycle.speed))
-	return MA_Smooth_Circular(diurnal_cycle, MA_smooth_fac/2) #return after a moving-average smoothing
+				if p == 'max':
+					diurnal_cycle[str(p)].append(np.max(sub_cycle.speed))
+				elif p == 'min':
+					diurnal_cycle[str(p)].append(np.min(sub_cycle.speed))
+				else:
+					diurnal_cycle[str(p)].append(np.percentile(sub_cycle.speed, int(p)))
+			diurnal_cycle[str(p)] = MA_Smooth_Circular(diurnal_cycle[str(p)], MA_smooth_fac/2)
+	return diurnal_cycle #return after a moving-average smoothing
 
 def GetSubBlueToad(bt, pair_id, day_of_week):
 	"""Given a pair_id and a day_of_week, return the subset of the blue toad data."""
@@ -75,15 +84,15 @@ def MA_Smooth_Circular(sequence, one_dir_window):
 	for ind in xrange(L): #iterate over the sequence
 		if ind < one_dir_window: #if we're too close to the beginning for a full window
 			indices_at_end = one_dir_window - ind
-			smoothed_seq.append(np.mean(sequence[(L-indices_at_end):] + sequence[0:(ind + one_dir_window)]))
+			smoothed_seq.append(round(np.mean(sequence[(L-indices_at_end):] + sequence[0:(ind + one_dir_window)]),0))
 		elif ind > L - one_dir_window: #too close to the end of the sequence for a full window
 			indices_at_start = ind + one_dir_window - L
-			smoothed_seq.append(np.mean(sequence[0:indices_at_start] + sequence[(ind - one_dir_window):]))
+			smoothed_seq.append(round(np.mean(sequence[0:indices_at_start] + sequence[(ind - one_dir_window):]),0))
 		else: #if we're in the middle somewhere
-			smoothed_seq.append(np.mean(sequence[(ind - one_dir_window):(ind + one_dir_window)]))
+			smoothed_seq.append(round(np.mean(sequence[(ind - one_dir_window):(ind + one_dir_window)]),0))
 	return smoothed_seq
 
-def GenerateDiurnalDic(bt, blue_toad_path, five_minute_fractions, window = 12):
+def GenerateDiurnalDic(bt, blue_toad_path, five_minute_fractions, pct_tile_list, window = 12):
 	"""Given a cleaned blue_toad data file, produce a smoothed diurnal cycle for all pair_id,
 	day_of_week combinations...and store in a dictionary for later use..."""
 	#fractions of a day in 5-min increments
@@ -94,7 +103,7 @@ def GenerateDiurnalDic(bt, blue_toad_path, five_minute_fractions, window = 12):
 		for day in xrange(7): #over all days_of_the_week
 			print "Building diurnal cycle for roadway %d on day %d (Monday = 0, Sunday = 6)" % (u,day)
 			sub_bt = GetSubBlueToad(bt, u, day)
-			DiurnalDic[str(u) + "_" + str(day)] = DefineDiurnalCycle(sub_bt, day, five_minute_fractions,
+			DiurnalDic[str(u) + "_" + str(day)] = DefineDiurnalCycle(sub_bt, day, five_minute_fractions, pct_tile_list,
 														window, np.mean(bt.speed)) #default to mean
 	return DiurnalDic
 
@@ -468,7 +477,7 @@ def RoundToFive(current_datetime):
 	return current_datetime
 
 def UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, current_datetime, pred_len, time_of_day, 
-							max_speed, ps_and_cs, smoother, steps_to_diurnal_return):
+							max_speed, ps_and_cs, smoother, steps_to_diurnal_return, min_spread_fac):
 	"""Turn the normalized predictions from (PredictionDic) back into the standard-form
 	estimates by using (DiurnalDic)."""
 	UnNormDic = {}
@@ -482,19 +491,36 @@ def UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, c
 	for road in PredictionDic.keys(): #iterate over all pair_ids
 		max_speed = MaximumDic[road] #shortest historical travel time for a roadway
 		UnNormDic[str(road)] = {}
-		std_seq = GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_len)
+		std_seq = GetStandardSequences(road, day_of_week, current_datetime, DiurnalDic, pred_len)
 		if str(road) in ps_and_cs.keys():
 			for p in PredictionDic[str(road)].keys():
 				norm_seq = PredictionDic[str(road)][str(p)]
 				if len(norm_seq) == 0:
 					UnNormDic[str(road)][str(p)] = []
 				else:
-					UnNormDic[str(road)][str(p)] = [round((min(n + s, max_speed)* float(min(smoother, i+1))/smoother + float(max(0,smoother-i-1))/smoother * float(ps_and_cs[str(road)][2])) * float(steps_to_diurnal_return - i)/steps_to_diurnal_return + float(i)/steps_to_diurnal_return * s, 0) for i, (n,s) in enumerate(zip(norm_seq, std_seq))]
+					UnNormDic[str(road)][str(p)] = [round((min(n + s, max_speed)* float(min(smoother, i+1))/smoother + float(max(0,smoother-i-1))/smoother * float(ps_and_cs[str(road)][2])) * float(steps_to_diurnal_return - i)/steps_to_diurnal_return + float(i)/steps_to_diurnal_return * s, 0) for i, (n,s) in enumerate(zip(norm_seq, std_seq['50']))]
+			if len(PredictionDic[str(road)].keys()) > 0:		
+				print 'SpreadingPercentiles for road %s' % road
+				spread_percentiles = SpreadPercentiles(UnNormDic[str(road)], std_seq, min_spread_fac, smoother)
+				for p in spread_percentiles.keys():
+					UnNormDic[str(road)][p] = spread_percentiles[p]
 		else:
 			for p in PredictionDic[str(road)].keys():
-				UnNormDic[str(road)][str(p)] = None
+				UnNormDic[str(road)][str(p)] = None							
 	return UnNormDic
 
+def SpreadPercentiles(roadway_percentiles, std_seq, min_spread_fac, smoother):
+	spread_percentiles = {}
+	for percentile in std_seq.keys():
+		spread_percentiles[percentile] = []
+		for i, (pred_percentile_speed, diurnal_percentile_speed, pred_median_speed, diurnal_median_speed) in enumerate(zip(roadway_percentiles[percentile], std_seq[percentile], roadway_percentiles['50'], std_seq['50'])):
+			min_acceptable_percentile_spread = float(min(i,smoother*2))/(smoother*2) * min_spread_fac * (diurnal_percentile_speed - diurnal_median_speed)
+			if abs(pred_percentile_speed - pred_median_speed) < abs(min_acceptable_percentile_spread):
+				spread_percentiles[percentile].append(round(roadway_percentiles['50'][i] + min_acceptable_percentile_spread,0))
+			else:
+				spread_percentiles[percentile].append(roadway_percentiles[percentile][i])
+	return spread_percentiles
+	
 def PctMap(pct_keys):
 	"""Given a list of (pct_keys), of the form '10', '20', 'min', 'max', etc, reverse them to map
 	travel_times to speeds, which are inversely related."""
@@ -519,34 +545,40 @@ def NDigitString(n, num):
 	else:
 		return '0' * (n - n_digits) + str(num) #add the necessary leading zeros and return
 
-def GetStandardSequence(road, day_of_week, current_datetime, DiurnalDic, pred_len):
+def GetStandardSequences(road, day_of_week, current_datetime, DiurnalDic, pred_len):
 	"""Given the (road), (day_of_week), the (current_datetime) at which we are looking to make predictions
 	forward in time, and the (DiurnalDic) used for baseline expectations, return the (pred_len) next baseline
 	travel times.  Note, if we are beginning at 12pm on Sunday, within 24 hours, we will be making
 	predictions for the subsequent Monday morning, a different list from DiurnalDic"""
+	initial_day_of_week, initial_datetime = day_of_week, current_datetime #to store
 	current_Diurnal_key = str(road) + "_" + str(day_of_week); fixed_pred_len = pred_len #this will not be changed
 	if current_Diurnal_key not in DiurnalDic.keys():
 		print "No data from segment %s historically on day %s, returning an empty list." % (str(road), str(day_of_week))
 		return []
-	day_index = GetIndexFromDatetime(current_datetime) #how many 5-minute intervals are we into the day
-	future_days = (day_index + pred_len)/288
-	d_seq = [] #to be extended with each iteration of the loop
-	for d in range(future_days + 1): #how many days in the DiurnalDic must we consider?
-		if d == future_days and pred_len > 0: #if this the last day for which we need to access DiurnalDic
-			d_seq = d_seq + DiurnalDic[current_Diurnal_key][(day_index + 1):(day_index + pred_len - 1)]
-		elif pred_len > 0: #add another day of normalized estimates and step forward one day
-			new_datetime = current_datetime + datetime.timedelta(minutes = 1440) #the 'next' day
-			new_day_of_week = AdjustDayOfWeek(current_datetime.day, new_datetime.day, day_of_week) #which day of the week?
-			next_Diurnal_key = str(road) + "_" + str(new_day_of_week) #the DiurnalDic key for next-day predictions
-			if next_Diurnal_key not in DiurnalDic.keys():
-				print "No data from segment %s historically on day %s, defaulting to a static, 100s transit time." % (str(road), str(day_of_week))
-				return []
-			d_seq = d_seq + DiurnalDic[current_Diurnal_key][(day_index + 1):] + DiurnalDic[next_Diurnal_key][0:day_index+1]
-			#step all values forward one day and remove 288 steps from pred_len
-			day_of_week = new_day_of_week; current_datetime = new_datetime; current_Diurnal_key = next_Diurnal_key; pred_len -= 288
-		else:
-			pass
-	return d_seq[:fixed_pred_len]
+	standard_sequences = {}
+	for percentile in DiurnalDic[current_Diurnal_key].keys():
+		current_datetime, pred_len = initial_datetime, fixed_pred_len
+		day_index = GetIndexFromDatetime(current_datetime) #how many 5-minute intervals are we into the day
+		future_days, day_of_week = (day_index + pred_len)/288, initial_day_of_week
+		standard_sequences[percentile] = [] #to be extended with each iteration of the loop
+		for d in range(future_days + 1): #how many days in the DiurnalDic must we consider?
+			if d == future_days and pred_len > 0: #if this the last day for which we need to access DiurnalDic
+				standard_sequences[percentile] = standard_sequences[percentile] + DiurnalDic[current_Diurnal_key][percentile][(day_index + 1):(day_index + pred_len - 1)]
+			elif pred_len > 0: #add another day of normalized estimates and step forward one day
+				new_datetime = current_datetime + datetime.timedelta(minutes = 1440) #the 'next' day
+				new_day_of_week = AdjustDayOfWeek(current_datetime.day, new_datetime.day, day_of_week) #which day of the week?
+				next_Diurnal_key = str(road) + "_" + str(new_day_of_week) #the DiurnalDic key for next-day predictions
+				if next_Diurnal_key not in DiurnalDic.keys():
+					print "No data from segment %s historically on day %s, defaulting to a static, 100s transit time." % (str(road), str(day_of_week))
+					return []
+				standard_sequences[percentile] = standard_sequences[percentile] + DiurnalDic[current_Diurnal_key][percentile][(day_index + 1):] + DiurnalDic[next_Diurnal_key][percentile][0:day_index+1]
+				#step all values forward one day and remove 288 steps from pred_len
+				day_of_week = new_day_of_week; current_datetime = new_datetime; current_Diurnal_key = next_Diurnal_key; pred_len -= 288
+			else:
+				pass
+	for percentile in DiurnalDic[current_Diurnal_key].keys():
+		standard_sequences[percentile] = standard_sequences[percentile][:fixed_pred_len]
+	return standard_sequences
 
 def GetIndexFromDatetime(current_datetime):
 	"""Given the (current_datetime), which is a datetime object, return an index from 0 to 287,
@@ -653,7 +685,8 @@ def HardCodedParameters():
 	"traffic_system_memory" : 72, #number of 5-min-steps to consider for weather conditions/traffic conditions
 	"traffic_similarity_pct" : 0.2, #how similar must historical traffic be? (0.1 means we located the 10% most similar)
 	"weather_kernel_pct" : 0.3, #how similar must historical weather be?
-	"weather_cost_facs" : {"SN" : 3, "RA" : 1, "FG" : 1, " " : 0}}
+	"weather_cost_facs" : {"SN" : 3, "RA" : 1, "FG" : 1, " " : 0},
+	"min_spread_fac" : 0.75} #how tight will we allow percentiles to become?}
 
 	D["weather_dir"] = os.path.join(D['data_path'], "NCDC_Weather")
 	return D
@@ -682,7 +715,7 @@ def PredictionModule(all_pair_ids, pairs_and_conditions, D, subset, time_of_day,
 									day_of_week, current_datetime, D['pct_range'], D['time_range'],
 									D['update_path'], D['bt_name'], D['pct_tile_list'], subset,
 									D['pred_duration'], time_of_day, D['weather_kernel_pct'], D['start_date'], D['end_date'])
-	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, current_datetime, D['pred_duration'], 										time_of_day, D['max_speed'], pairs_and_conditions, D['steps_to_smooth'], D['steps_to_diurnal_return'])
+	CurrentPredDic = UnNormalizePredictions(PredictionDic, DiurnalDic, MaximumDic, day_of_week, current_datetime, D['pred_duration'], 										time_of_day, D['max_speed'], pairs_and_conditions, D['steps_to_smooth'], D['steps_to_diurnal_return'], D['min_spread_fac'])
 	return CurrentPredDic
 
 def main(D, output_file_name, subset, time_of_day):
@@ -710,9 +743,9 @@ def main(D, output_file_name, subset, time_of_day):
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):
 			sub_bt = SubBt_Cleaned_to_PreNormalized(D, a); flag = 1 #to note that this process is already done.
 		if str(a) + "_0" not in DiurnalDic.keys(): #if the DiurnalDictionary is still empty
-			if not flag: #if we need to process of the sub_bt data frame again.
+			if not flag: #if we need to process the sub_bt data frame again.
 				sub_bt = SubBt_Cleaned_to_PreNormalized(D, a); flag = 1 #to note that this process is already done.
-			DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['update_path'], five_minute_fractions, D['window'])); DD_flag = True
+			DiurnalDic.update(GenerateDiurnalDic(sub_bt, D['update_path'], five_minute_fractions, D['pct_tile_list'], D['window'])); DD_flag = True
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized.csv")):
 			sub_bt = NormalizeTravelTime(sub_bt, DiurnalDic, os.path.join(D['update_path'], "IndividualFiles"), D['bt_name'] + "_" + str(a))
 		if not os.path.exists(os.path.join(D['update_path'], "IndividualFiles", D['bt_name'] + "_" + str(a) + "_Cleaned_Normalized_Weather.csv")):
@@ -733,7 +766,7 @@ def main(D, output_file_name, subset, time_of_day):
 	else:
 		MaximumDic = GetJSON(D['update_path'], "MaximumDic.txt") #read in the minimum predictions
 	if D['predict'] != 0: #if we are generating forward predictions
-		day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_speed_history'], DiurnalDic, D['traffic_system_memory'], weights, D['path_to_current'], D['default_roadway_pattern'])
+		day_of_week, current_datetime, pairs_and_conditions = mass.GetCurrentInfo(D['path_to_speed_history'], DiurnalDic, D['traffic_system_memory'], weights, D['path_to_current'], D['default_roadway_pattern'], D['pct_tile_list'])
 		if time_of_day == "": #if we are interested in predictions based on current conditions
 			pairs_and_conditions = NCDC.RealTimeWeather(D, NOAADic, NOAA_df, pairs_and_conditions, weights)
 		else: #zero-out the normalized conditions, historical analysis starts from a normalized baseline of zero (typical conditions)

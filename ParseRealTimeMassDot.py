@@ -62,18 +62,20 @@ def GetDiurnalHistory(DiurnalDic, traffic_system_memory, keys_and_indices, roadw
 	diurnal_history = []
 	for value in range(traffic_system_memory):
 		diurnal_key = "_".join([roadway,keys_and_indices[str(value)][0]])
-		diurnal_history.append(DiurnalDic[diurnal_key][value])
+		diurnal_history.append(DiurnalDic[diurnal_key]['50'][value])
 	return diurnal_history		
 
 def GetNormalizedTrafficHistory(historical_data, roadway, diurnal_history, weights, current_speed):
 	L = len(diurnal_history)
 	if current_speed == -1: current_speed = historical_data[roadway][-1] #just use the most recent time
-	if len(historical_data[roadway]) < L - 1:
-		return [0 for i in range(L)]
+	L_historical_data = len(historical_data[roadway])
+	if L_historical_data < L - 1:
+		normalized_history = [c - d for c,d in zip(historical_data[roadway] + [current_speed], diurnal_history[:L_historical_data + 1])] 
+		return normalized_history + [0 for i in range(L - L_historical_data - 1)]
 	else:
 		return [c - d for c,d in zip(historical_data[roadway] + [current_speed], diurnal_history)]
 			
-def GetCurrentInfo(massdot_history, DiurnalDic, traffic_system_memory, weights, path_to_current, default_roadway):
+def GetCurrentInfo(massdot_history, DiurnalDic, traffic_system_memory, weights, path_to_current, default_roadway, pct_tile_list):
 	"""To run a real-time prediction scheme, we must obtain four pieces of information.
 	The first is the current weather conditions.  We have not constructed a real-time query
 	to NOAA/NCDC.  This is probably above my pay-grade, but I can dig into it.  The second is
@@ -88,7 +90,7 @@ def GetCurrentInfo(massdot_history, DiurnalDic, traffic_system_memory, weights, 
 	pair_cond_weather_dic = {}
 	for roadway in [k for k in historical_data.keys() if k != 'Start']:
 		if str(roadway) + "_" + str(day_of_week) not in DiurnalDic.keys(): 
-			DiurnalDic = AddDummyValuesToDiurnalDic(DiurnalDic, day_of_week, roadway, default_roadway)
+			DiurnalDic = AddDummyValuesToDiurnalDic(DiurnalDic, day_of_week, roadway, default_roadway, pct_tile_list)
 		print "gathering current and recent conditions for roadway %s" % roadway
 		if roadway not in current_data.keys():
 			print "No recent data available for roadway %s" % roadway
@@ -97,20 +99,22 @@ def GetCurrentInfo(massdot_history, DiurnalDic, traffic_system_memory, weights, 
 				current_speed = -1
 				normalized_history = [0 for w in weights] #assume 'typical conditions'
 			else:	
-				current_speed = DiurnalDic[roadway + "_" + str(day_of_week)][time_of_day_ind]
+				current_speed = DiurnalDic[roadway + "_" + str(day_of_week)]['50'][time_of_day_ind]
 				diurnal_history = GetDiurnalHistory(DiurnalDic, traffic_system_memory, keys_and_indices, roadway)
 				normalized_history = GetNormalizedTrafficHistory(historical_data, roadway, diurnal_history, weights, current_speed)
 		else:
-			current_speed = float(current_data[roadway]['speed']) if not current_data[roadway]['stale'] else DiurnalDic[roadway + "_" + str(day_of_week)][time_of_day_ind]	
+			current_speed = float(current_data[roadway]['speed']) if not current_data[roadway]['stale'] else DiurnalDic[roadway + "_" + str(day_of_week)]['50'][time_of_day_ind]	
 			diurnal_history = GetDiurnalHistory(DiurnalDic, traffic_system_memory, keys_and_indices, roadway)
 			normalized_history = GetNormalizedTrafficHistory(historical_data, roadway, diurnal_history, weights, current_speed)
 		pair_cond_weather_dic[roadway] = [np.sum([n * w for n,w in zip(normalized_history, weights)]), ' ', current_speed]
 	return day_of_week, current_datetime, pair_cond_weather_dic
 	
-def	AddDummyValuesToDiurnalDic(DiurnalDic, day_of_week, roadway, default_roadway):
+def	AddDummyValuesToDiurnalDic(DiurnalDic, day_of_week, roadway, default_roadway, pct_tile_list):
 	diurnal_key = roadway + "_" + str(day_of_week)
 	if not diurnal_key in DiurnalDic.keys():
-		DiurnalDic[diurnal_key] = DiurnalDic[str(default_roadway) + "_" + str(day_of_week)]
+		DiurnalDic[diurnal_key] = {}
+		for p in pct_tile_list:
+			DiurnalDic[diurnal_key][str(p)] = DiurnalDic[str(default_roadway) + "_" + str(day_of_week)][str(p)]
 	return DiurnalDic
 			
 def ParseCurrentJson(current_transit_dict): 
