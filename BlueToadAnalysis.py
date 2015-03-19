@@ -117,7 +117,7 @@ def NormalizeTravelTime(bt, DiurnalDic, blue_toad_path, blue_toad_name):
 		for p, d, i, t in zip(bt.pair_id, bt.day_of_week, bt.insert_time, bt.speed):
 			diurnal_key = str(p) + "_" + str(d) #to find the correct key of the dictionary
 			time_index = int((i - int(i)) * 288 + .0001)
-			normalized_times.append(round(t - DiurnalDic[diurnal_key][time_index], 2))
+			normalized_times.append(round(t - DiurnalDic[diurnal_key]['50'][time_index], 2))
 		bt['Normalized_t'] = normalized_times
 	else:
 		bt['Normalized_t'] = []
